@@ -11,8 +11,7 @@ try {
             g.deskripsi, 
             g.created_at,
             (SELECT COUNT(*) FROM wilayah w WHERE w.group_id = g.id) AS jumlah_wilayah,
-            (SELECT COUNT(*) FROM markers m WHERE m.group_id = g.id) AS jumlah_marker,
-            EXISTS(SELECT 1 FROM group_boundary gb WHERE gb.group_id = g.id) AS has_boundary
+            (SELECT COUNT(*) FROM markers m WHERE m.group_id = g.id) AS jumlah_marker
         FROM groups g
         ORDER BY g.created_at DESC
     ";
@@ -55,9 +54,13 @@ try {
         </div>
 
         <?php if (isset($error_msg)): ?>
-            <div style="background-color: #fee2e2; border-left: 4px solid var(--danger); padding: 1rem; border-radius: 0.5rem; color: #991b1b; margin-bottom: 2rem;">
-                <strong>Koneksi Database Bermasalah:</strong> <?php echo htmlspecialchars($error_msg); ?><br>
-                <span style="font-size: 0.875rem;">Pastikan database <code>uts_sig</code> telah dibuat dan extension <code>postgis</code> diaktifkan.</span>
+            <div class="alert" style="border-color: var(--danger); background-color: #fef2f2; color: #991b1b; padding: 1rem; margin-bottom: 2rem;">
+                <i class="fas fa-exclamation-triangle" style="margin-top: 0.2rem; color: var(--danger);"></i>
+                <div>
+                    <h5 style="font-weight: 700; margin-bottom: 0.25rem;">Koneksi Database Bermasalah</h5>
+                    <p style="font-size: 0.825rem; color: #991b1b;"><?php echo htmlspecialchars($error_msg); ?></p>
+                    <p style="font-size: 0.775rem; margin-top: 0.5rem; opacity: 0.8;">Pastikan database <code>himpunan</code> telah dibuat dan extension <code>postgis</code> diaktifkan.</p>
+                </div>
             </div>
         <?php endif; ?>
 
@@ -83,15 +86,9 @@ try {
                                     <span class="stat-val"><?php echo $group['jumlah_wilayah']; ?></span>
                                     <span class="stat-lbl">Wilayah</span>
                                 </div>
-                                <div class="stat-item">
+                                <div class="stat-item" style="margin-left: 1rem;">
                                     <span class="stat-val"><?php echo $group['jumlah_marker']; ?></span>
                                     <span class="stat-lbl">Marker</span>
-                                </div>
-                                <div class="stat-item">
-                                    <span class="stat-val" style="color: <?php echo $group['has_boundary'] ? 'var(--success)' : 'var(--danger)'; ?>">
-                                        <i class="fas <?php echo $group['has_boundary'] ? 'fa-check-circle' : 'fa-times-circle'; ?>"></i>
-                                    </span>
-                                    <span class="stat-lbl">Batas Acuan</span>
                                 </div>
                             </div>
                             

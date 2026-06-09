@@ -54,35 +54,29 @@ try {
 
     <header>
         <h1><i class="fas fa-map-marked-alt"></i> SIG <span>Spasial</span> - <?php echo htmlspecialchars($group['nama_group']); ?></h1>
-        <a href="index.php" class="btn btn-outline"><i class="fas fa-arrow-left"></i> Kembali ke Dashboard</a>
+        <a href="index.php" class="btn-back"><i class="fas fa-arrow-left"></i> Kembali</a>
     </header>
 
     <div class="app-layout">
         <!-- Sidebar Panel Kiri -->
-        <aside class="sidebar">
+        <aside class="sidebar no-scrollbar">
             <div class="sidebar-header">
-                <i class="fas fa-sliders-h" style="color: var(--brand-color);"></i>
-                <h2>Panel Kontrol Spasial</h2>
+                <i class="fas fa-sliders-h" style="color: var(--text-primary);"></i>
+                <h2>Panel Kontrol</h2>
             </div>
             
-            <div class="sidebar-scroll">
+            <div class="sidebar-scroll no-scrollbar">
                 
-                <!-- Keterangan Group -->
-                <div style="background-color: var(--bg-primary); padding: 1rem; border-radius: 0.5rem; border: 1px solid var(--border-color);">
-                    <h4 style="font-size: 0.875rem; font-weight: bold; margin-bottom: 0.25rem;">Deskripsi Group:</h4>
-                    <p style="font-size: 0.8rem; color: var(--text-secondary);"><?php echo htmlspecialchars($group['deskripsi'] ?: 'Tidak ada deskripsi.'); ?></p>
-                </div>
-
                 <!-- 1. Menu Menggambar -->
                 <div class="panel-section">
-                    <h3><i class="fas fa-edit"></i> 1. Gambar Elemen Peta</h3>
-                    <div id="draw-instruction" class="draw-instructions" style="display: none;"></div>
+                    <h3><i class="fas fa-edit"></i> 1. Gambar Elemen</h3>
+                    <div id="draw-instruction" class="alert draw-instructions" style="display: none;"></div>
                     <div class="draw-btn-group">
                         <button class="btn btn-outline btn-sm" onclick="startDrawing('wilayah')" style="justify-content: flex-start;">
-                            <i class="fas fa-draw-polygon" style="color: #2563eb;"></i> Wilayah Baru (Polygon)
+                            <i class="fas fa-draw-polygon" style="color: #3b82f6;"></i> Wilayah Baru (Polygon)
                         </button>
                         <button class="btn btn-outline btn-sm" onclick="startDrawing('marker')" style="justify-content: flex-start;">
-                            <i class="fas fa-map-marker-alt" style="color: var(--brand-color);"></i> Marker Baru (Titik)
+                            <i class="fas fa-map-marker-alt" style="color: #ef4444;"></i> Marker Baru (Titik)
                         </button>
                     </div>
                 </div>
@@ -93,75 +87,131 @@ try {
                     
                     <div style="margin-bottom: 0.75rem;">
                         <span style="font-size: 0.75rem; font-weight: bold; color: var(--text-secondary);">Daftar Wilayah (Polygon):</span>
-                        <ul id="wilayah-list" class="elements-list"></ul>
+                        <ul id="wilayah-list" class="elements-list no-scrollbar"></ul>
                     </div>
 
                     <div>
                         <span style="font-size: 0.75rem; font-weight: bold; color: var(--text-secondary);">Daftar Marker (Titik):</span>
-                        <ul id="marker-list" class="elements-list"></ul>
+                        <ul id="marker-list" class="elements-list no-scrollbar"></ul>
                     </div>
                 </div>
 
                 <!-- 3. Panel Analisis Spasial -->
                 <div class="panel-section">
-                    <h3><i class="fas fa-project-diagram"></i> 3. Analisis Himpunan</h3>
+                    <h3><i class="fas fa-project-diagram"></i> 3. Pilihan Wilayah</h3>
                     
                     <div class="form-group">
                         <label for="wilayah_a">Wilayah A (Polygon 1)</label>
-                        <select id="wilayah_a" class="form-control">
+                        <select id="wilayah_a" class="form-control" onchange="triggerAnalysisSync()">
                             <option value="">-- Pilih Wilayah A --</option>
                         </select>
                     </div>
 
-                    <div class="form-group" style="margin-bottom: 1.25rem;">
+                    <div class="form-group" style="margin-bottom: 1rem;">
                         <label for="wilayah_b">Wilayah B (Polygon 2)</label>
-                        <select id="wilayah_b" class="form-control">
+                        <select id="wilayah_b" class="form-control" onchange="triggerAnalysisSync()">
                             <option value="">-- Pilih Wilayah B --</option>
                         </select>
                     </div>
 
-                    <label style="font-size: 0.875rem; font-weight: 600; color: var(--text-primary);">Pilih Operasi Spasial:</label>
-                    <div class="analysis-grid">
-                        <button id="btn-intersect" class="btn-analysis" onclick="runAnalysis('intersection')">
-                            <i class="fas fa-circle-nodes" style="font-size: 1.25rem;"></i>
-                            <span>Irisan A ∩ B</span>
-                        </button>
-                        <button id="btn-diff" class="btn-analysis" onclick="runAnalysis('difference')">
-                            <i class="fas fa-scissors" style="font-size: 1.25rem;"></i>
-                            <span>Selisih A - B</span>
-                        </button>
-                        <button id="btn-diff-ba" class="btn-analysis" onclick="runAnalysis('difference_ba')">
-                            <i class="fas fa-scissors fa-flip-horizontal" style="font-size: 1.25rem;"></i>
-                            <span>Selisih B - A</span>
-                        </button>
-                        <button id="btn-symdiff" class="btn-analysis" onclick="runAnalysis('symdifference')">
-                            <i class="fas fa-circle-minus" style="font-size: 1.25rem;"></i>
-                            <span>Non-Irisan A △ B</span>
-                        </button>
-                        <button id="btn-outside" class="btn-analysis" onclick="runAnalysis('outside')" style="grid-column: span 2;">
-                            <i class="fas fa-circle-xmark" style="font-size: 1.25rem;"></i>
-                            <span>Di Luar A dan B</span>
-                        </button>
-                    </div>
+                    <button class="btn btn-outline btn-sm" onclick="triggerAnalysisSync()" style="width: 100%; justify-content: center; gap: 0.5rem; margin-top: 0.25rem;">
+                        <i class="fas fa-sync-alt"></i> Sinkronkan Peta
+                    </button>
                 </div>
-
-                <!-- 4. Hasil Analisis -->
-                <div class="panel-section" style="border-color: #c084fc; background-color: #faf5ff;">
-                    <h3 style="color: #a855f7;"><i class="fas fa-chart-bar"></i> 4. Hasil Analisis</h3>
-                    <div id="analysis-results-panel">
-                        <div class="results-card" style="text-align: center; color: var(--text-secondary); font-size: 0.8rem;">
-                            Pilih opsi analisis di atas untuk memproses data.
-                        </div>
-                    </div>
-                </div>
-
             </div>
         </aside>
 
-        <!-- Container Peta Kanan -->
-        <div class="map-container">
-            <div id="map"></div>
-        </div>
+        <!-- Main Content Area Kanan -->
+        <main class="main-content no-scrollbar">
+            <!-- Peta Utama di Atas -->
+            <div class="main-map-wrapper">
+                <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 0.75rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="fas fa-map" style="color: var(--text-primary);"></i> Peta Utama (Input Wilayah & Marker)
+                </h3>
+                <div class="main-map-container">
+                    <div id="map"></div>
+                </div>
+            </div>
+
+            <!-- 5 Visual Maps Hasil Analisis di Bawah -->
+            <div class="sub-maps-section">
+                <h3 class="sub-maps-section-title">
+                    <i class="fas fa-th-large"></i> Hasil Visualisasi Spasial Himpunan
+                </h3>
+                
+                <div class="sub-maps-grid">
+                    <!-- Map 1: Union (A dan B) -->
+                    <div class="sub-map-card">
+                        <h4>
+                            <span>1. Wilayah A dan B (Union)</span>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span id="badge-union" class="badge">0 Titik</span>
+                                <button class="btn btn-outline btn-sm" onclick="triggerAnalysisSync()" style="padding: 0.15rem 0.35rem; font-size: 0.7rem;" title="Refresh">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                            </div>
+                        </h4>
+                        <div id="sub-map-union" class="sub-map-container"></div>
+                    </div>
+
+                    <!-- Map 2: A - B -->
+                    <div class="sub-map-card">
+                        <h4>
+                            <span>2. Wilayah A tapi bukan B</span>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span id="badge-diff-ab" class="badge">0 Titik</span>
+                                <button class="btn btn-outline btn-sm" onclick="triggerAnalysisSync()" style="padding: 0.15rem 0.35rem; font-size: 0.7rem;" title="Refresh">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                            </div>
+                        </h4>
+                        <div id="sub-map-diff-ab" class="sub-map-container"></div>
+                    </div>
+
+                    <!-- Map 3: B - A -->
+                    <div class="sub-map-card">
+                        <h4>
+                            <span>3. Wilayah B tapi bukan A</span>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span id="badge-diff-ba" class="badge">0 Titik</span>
+                                <button class="btn btn-outline btn-sm" onclick="triggerAnalysisSync()" style="padding: 0.15rem 0.35rem; font-size: 0.7rem;" title="Refresh">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                            </div>
+                        </h4>
+                        <div id="sub-map-diff-ba" class="sub-map-container"></div>
+                    </div>
+
+                    <!-- Map 4: Outside A dan B -->
+                    <div class="sub-map-card">
+                        <h4>
+                            <span>4. Selain Wilayah A dan B</span>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span id="badge-outside" class="badge">0 Titik</span>
+                                <button class="btn btn-outline btn-sm" onclick="triggerAnalysisSync()" style="padding: 0.15rem 0.35rem; font-size: 0.7rem;" title="Refresh">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                            </div>
+                        </h4>
+                        <div id="sub-map-outside" class="sub-map-container"></div>
+                    </div>
+
+                    <!-- Map 5: Intersection (Irisan) -->
+                    <div class="sub-map-card">
+                        <h4>
+                            <span>5. Irisan A dan B (Gray Style)</span>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span id="badge-intersect" class="badge">0 Titik</span>
+                                <button class="btn btn-outline btn-sm" onclick="triggerAnalysisSync()" style="padding: 0.15rem 0.35rem; font-size: 0.7rem;" title="Refresh">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                            </div>
+                        </h4>
+                        <div id="sub-map-intersect" class="sub-map-container"></div>
+                    </div>
+                </div>
+            </div>
+        </main>
     </div>
 
     <!-- Inject Group ID ke Javascript global -->
@@ -173,11 +223,12 @@ try {
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
     
-    <!-- Turf.js (untuk keperluan manipulasi spasial opsional di frontend) -->
+    <!-- Turf.js -->
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
 
     <!-- App JS Logic -->
     <script src="assets/js/map.js"></script>
     <script src="assets/js/analysis.js"></script>
+
 </body>
 </html>

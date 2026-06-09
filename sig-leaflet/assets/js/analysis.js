@@ -1,233 +1,258 @@
 // assets/js/analysis.js
 
-// Fungsi utama untuk melakukan analisis spasial
-function runAnalysis(operationType) {
+// Fungsi helper untuk menghasilkan icon marker berwarna kustom
+function getColoredMarkerIcon(bgColor) {
+    return L.divIcon({
+        className: 'custom-sub-marker',
+        html: `<div style="width: 20px; height: 20px; border-radius: 50%; background: ${bgColor}; border: 2px solid #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center;"><div style="width: 6px; height: 6px; border-radius: 50%; background: #fff;"></div></div>`,
+        iconSize: [20, 20],
+        iconAnchor: [10, 10],
+        popupAnchor: [0, -10]
+    });
+}
+
+// Fungsi utama untuk mensinkronkan seluruh 5 sub-maps
+function triggerAnalysisSync() {
     const wilayahA = document.getElementById('wilayah_a').value;
     const wilayahB = document.getElementById('wilayah_b').value;
 
-    if (!wilayahA || !wilayahB) {
-        alert('Pilih Wilayah A dan Wilayah B terlebih dahulu untuk melakukan analisis.');
+    // Jika salah satu wilayah belum dipilih, bersihkan seluruh sub-map
+    if (!wilayahA || !wilayahB || wilayahA === wilayahB) {
+        clearAllSubMaps();
         return;
     }
 
-    if (wilayahA === wilayahB) {
-        alert('Wilayah A dan Wilayah B tidak boleh sama.');
-        return;
-    }
-
-    // Tentukan endpoint API berdasarkan tipe operasi
-    let apiEndpoint = '';
-    let operationName = '';
+    // Ambil data GeoJSON referensi Wilayah A dan Wilayah B langsung dari peta utama
+    let geojsonA = null;
+    let geojsonB = null;
     
-    switch (operationType) {
-        case 'intersection':
-            apiEndpoint = 'api/analysis_intersection.php';
-            operationName = 'Irisan (A ∩ B)';
-            break;
-        case 'difference':
-            apiEndpoint = 'api/analysis_difference.php';
-            operationName = 'Selisih (A - B)';
-            break;
-        case 'difference_ba':
-            apiEndpoint = 'api/analysis_difference_ba.php';
-            operationName = 'Selisih (B - A)';
-            break;
-        case 'outside':
-            apiEndpoint = 'api/analysis_outside.php';
-            operationName = 'Luar Gabungan Semesta - (A ∪ B)';
-            break;
-        case 'symdifference':
-            apiEndpoint = 'api/analysis_symdifference.php';
-            operationName = 'Symmetric Difference (A △ B)';
-            break;
-        default:
-            return;
+    wilayahGroup.eachLayer(function(layer) {
+        if (layer.wilayahId == wilayahA) geojsonA = layer.toGeoJSON();
+        if (layer.wilayahId == wilayahB) geojsonB = layer.toGeoJSON();
+    });
+
+    // Jalankan ke-5 query spasial secara bersamaan
+    fetchUnion(wilayahA, wilayahB, geojsonA, geojsonB);
+    fetchDiffAB(wilayahA, wilayahB, geojsonA, geojsonB);
+    fetchDiffBA(wilayahA, wilayahB, geojsonA, geojsonB);
+    fetchOutside(wilayahA, wilayahB, geojsonA, geojsonB);
+    fetchIntersect(wilayahA, wilayahB, geojsonA, geojsonB);
+}
+
+// Membersihkan seluruh layer dan badge angka pada sub-maps
+function clearAllSubMaps() {
+    for (const key in subMapLayers) {
+        if (subMapLayers[key]) {
+            subMapLayers[key].clearLayers();
+        }
     }
+    document.getElementById('badge-union').innerText = '0 Titik';
+    document.getElementById('badge-diff-ab').innerText = '0 Titik';
+    document.getElementById('badge-diff-ba').innerText = '0 Titik';
+    document.getElementById('badge-outside').innerText = '0 Titik';
+    document.getElementById('badge-intersect').innerText = '0 Titik';
+}
 
-    // Tampilkan status loading di tombol
-    setAnalysisButtonsActive(operationType);
-    showLoadingResults();
+// Menggambar outline referensi Wilayah A dan B
+function drawReferenceOutlines(layerGroup, geojsonA, geojsonB) {
+    const referenceStyle = {
+        color: '#64748b',
+        weight: 1.5,
+        dashArray: '4, 4',
+        fillOpacity: 0,
+        interactive: false
+    };
 
-    fetch(apiEndpoint, {
+    if (geojsonA) {
+        L.geoJSON(geojsonA, { style: referenceStyle }).addTo(layerGroup);
+    }
+    if (geojsonB) {
+        L.geoJSON(geojsonB, { style: referenceStyle }).addTo(layerGroup);
+    }
+}
+
+// 1. Fetch & Render: Wilayah A dan B (Union)
+function fetchUnion(wilayahA, wilayahB, geojsonA, geojsonB) {
+    const lg = subMapLayers.union;
+    lg.clearLayers();
+    drawReferenceOutlines(lg, geojsonA, geojsonB);
+
+    fetch('api/analysis_union.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            wilayah_a: wilayahA,
-            wilayah_b: wilayahB
-        })
+        body: JSON.stringify({ wilayah_a: wilayahA, wilayah_b: wilayahB })
     })
     .then(res => res.json())
     .then(res => {
         if (res.status === 'success') {
-            displayAnalysisResults(res, operationName);
-        } else {
-            resetAnalysisUI();
-            alert('Analisis Gagal: ' + res.message);
+            // Update badge jumlah marker
+            document.getElementById('badge-union').innerText = (res.markers ? res.markers.length : 0) + ' Titik';
+            
+            // Gambar geometri hasil union (warna ungu)
+            if (res.geometry) {
+                L.geoJSON(res.geometry, {
+                    style: { color: '#a855f7', weight: 2.5, fillColor: '#c084fc', fillOpacity: 0.35 }
+                }).addTo(lg);
+            }
+            
+            // Gambar hanya marker yang memenuhi syarat (warna ungu)
+            if (res.markers) {
+                res.markers.forEach(m => {
+                    const coords = m.geojson.coordinates;
+                    L.marker([coords[1], coords[0]], { icon: getColoredMarkerIcon('#a855f7') })
+                     .bindPopup(`<strong>${m.nama_marker}</strong><br>Berada di A atau B`)
+                     .addTo(lg);
+                });
+            }
         }
     })
-    .catch(err => {
-        console.error(err);
-        resetAnalysisUI();
-        alert('Terjadi kesalahan saat memproses data analisis.');
-    });
+    .catch(err => console.error('Gagal fetch union:', err));
 }
 
-// Set status aktif pada tombol analisis yang diklik
-function setAnalysisButtonsActive(activeType) {
-    const buttons = {
-        'intersection': document.getElementById('btn-intersect'),
-        'difference': document.getElementById('btn-diff'),
-        'difference_ba': document.getElementById('btn-diff-ba'),
-        'outside': document.getElementById('btn-outside'),
-        'symdifference': document.getElementById('btn-symdiff')
-    };
+// 2. Fetch & Render: Wilayah A tapi bukan B (Difference A - B)
+function fetchDiffAB(wilayahA, wilayahB, geojsonA, geojsonB) {
+    const lg = subMapLayers.diffAB;
+    lg.clearLayers();
+    drawReferenceOutlines(lg, geojsonA, geojsonB);
 
-    for (const type in buttons) {
-        if (buttons[type]) {
-            if (type === activeType) {
-                buttons[type].classList.add('active');
-            } else {
-                buttons[type].classList.remove('active');
+    fetch('api/analysis_difference.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wilayah_a: wilayahA, wilayah_b: wilayahB })
+    })
+    .then(res => res.json())
+    .then(res => {
+        if (res.status === 'success') {
+            document.getElementById('badge-diff-ab').innerText = (res.markers ? res.markers.length : 0) + ' Titik';
+            
+            // Gambar geometri hasil selisih (warna biru)
+            if (res.geometry) {
+                L.geoJSON(res.geometry, {
+                    style: { color: '#2563eb', weight: 2.5, fillColor: '#93c5fd', fillOpacity: 0.35 }
+                }).addTo(lg);
+            }
+            
+            // Gambar marker (warna biru)
+            if (res.markers) {
+                res.markers.forEach(m => {
+                    const coords = m.geojson.coordinates;
+                    L.marker([coords[1], coords[0]], { icon: getColoredMarkerIcon('#2563eb') })
+                     .bindPopup(`<strong>${m.nama_marker}</strong><br>Di Wilayah A, Bukan B`)
+                     .addTo(lg);
+                });
             }
         }
-    }
+    })
+    .catch(err => console.error('Gagal fetch difference A-B:', err));
 }
 
-// Menampilkan loading state di panel hasil
-function showLoadingResults() {
-    const panel = document.getElementById('analysis-results-panel');
-    panel.innerHTML = `
-        <div class="results-card" style="text-align: center;">
-            <div style="color: var(--brand-color); margin-bottom: 0.5rem;"><i class="fas fa-spinner fa-spin"></i></div>
-            <span style="font-size: 0.8rem; color: var(--text-secondary);">Memproses query spasial PostGIS...</span>
-        </div>
-    `;
-}
+// 3. Fetch & Render: Wilayah B tapi bukan A (Difference B - A)
+function fetchDiffBA(wilayahA, wilayahB, geojsonA, geojsonB) {
+    const lg = subMapLayers.diffBA;
+    lg.clearLayers();
+    drawReferenceOutlines(lg, geojsonA, geojsonB);
 
-// Reset tombol & hasil UI ke kondisi semula jika terjadi error
-function resetAnalysisUI() {
-    setAnalysisButtonsActive(null);
-    document.getElementById('analysis-results-panel').innerHTML = `
-        <div class="results-card" style="text-align: center; color: var(--text-secondary); font-size: 0.8rem;">
-            Pilih opsi analisis di atas untuk memproses data.
-        </div>
-    `;
-    analysisGroup.clearLayers();
-
-    // Tampilkan kembali semua wilayah dan marker bawaan
-    wilayahGroup.eachLayer(function(layer) {
-        if (!map.hasLayer(layer)) map.addLayer(layer);
-    });
-    if (!map.hasLayer(markerGroup)) {
-        map.addLayer(markerGroup);
-    }
-}
-
-// Menampilkan hasil analisis ke peta dan sidebar
-function displayAnalysisResults(data, operationName) {
-    // 1. Bersihkan layer analisis sebelumnya
-    analysisGroup.clearLayers();
-
-    // Sembunyikan wilayah yang tidak dipilih (selain A dan B) dan semua marker default
-    const wilayahA = document.getElementById('wilayah_a').value;
-    const wilayahB = document.getElementById('wilayah_b').value;
-    
-    wilayahGroup.eachLayer(function(layer) {
-        if (layer.wilayahId == wilayahA || layer.wilayahId == wilayahB) {
-            if (!map.hasLayer(layer)) map.addLayer(layer);
-        } else {
-            if (map.hasLayer(layer)) map.removeLayer(layer);
-        }
-    });
-    
-    if (map.hasLayer(markerGroup)) {
-        map.removeLayer(markerGroup);
-    }
-
-    // 2. Gambar Polygon Hasil Spasial jika geometri ada
-    let geomAdded = false;
-    let bounds = [];
-
-    if (data.geometry) {
-        const analysisLayer = L.geoJSON(data.geometry, {
-            style: {
-                color: '#a855f7', // Warna ungu menyala
-                weight: 4,
-                fillColor: '#c084fc',
-                fillOpacity: 0.4,
-                dashArray: '3, 3'
+    fetch('api/analysis_difference_ba.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wilayah_a: wilayahA, wilayah_b: wilayahB })
+    })
+    .then(res => res.json())
+    .then(res => {
+        if (res.status === 'success') {
+            document.getElementById('badge-diff-ba').innerText = (res.markers ? res.markers.length : 0) + ' Titik';
+            
+            // Gambar geometri hasil selisih (warna merah)
+            if (res.geometry) {
+                L.geoJSON(res.geometry, {
+                    style: { color: '#ef4444', weight: 2.5, fillColor: '#fca5a5', fillOpacity: 0.35 }
+                }).addTo(lg);
             }
-        }).addTo(analysisGroup);
+            
+            // Gambar marker (warna merah)
+            if (res.markers) {
+                res.markers.forEach(m => {
+                    const coords = m.geojson.coordinates;
+                    L.marker([coords[1], coords[0]], { icon: getColoredMarkerIcon('#ef4444') })
+                     .bindPopup(`<strong>${m.nama_marker}</strong><br>Di Wilayah B, Bukan A`)
+                     .addTo(lg);
+                });
+            }
+        }
+    })
+    .catch(err => console.error('Gagal fetch difference B-A:', err));
+}
 
-        analysisLayer.bindPopup(`<strong>Hasil Analisis: ${operationName}</strong>`);
-        bounds.push(analysisLayer.getBounds());
-        geomAdded = true;
-    }
+// 4. Fetch & Render: Selain Wilayah A dan B (Outside A & B)
+function fetchOutside(wilayahA, wilayahB, geojsonA, geojsonB) {
+    const lg = subMapLayers.outside;
+    lg.clearLayers();
+    drawReferenceOutlines(lg, geojsonA, geojsonB);
 
-    // 3. Tampilkan/filter Marker hasil analisis
-    const countMarkers = data.markers ? data.markers.length : 0;
-    
-    if (data.markers && countMarkers > 0) {
-        data.markers.forEach(m => {
-            const coords = m.geojson.coordinates;
-            const latlng = [coords[1], coords[0]];
+    fetch('api/analysis_outside.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wilayah_a: wilayahA, wilayah_b: wilayahB })
+    })
+    .then(res => res.json())
+    .then(res => {
+        if (res.status === 'success') {
+            document.getElementById('badge-outside').innerText = (res.markers ? res.markers.length : 0) + ' Titik';
+            
+            // Gambar geometri hasil complement luar (warna cyan)
+            if (res.geometry) {
+                L.geoJSON(res.geometry, {
+                    style: { color: '#06b6d4', weight: 2.5, fillColor: '#67e8f9', fillOpacity: 0.35 }
+                }).addTo(lg);
+            }
+            
+            // Gambar marker (warna cyan)
+            if (res.markers) {
+                res.markers.forEach(m => {
+                    const coords = m.geojson.coordinates;
+                    L.marker([coords[1], coords[0]], { icon: getColoredMarkerIcon('#06b6d4') })
+                     .bindPopup(`<strong>${m.nama_marker}</strong><br>Di Luar Wilayah A & B`)
+                     .addTo(lg);
+                });
+            }
+        }
+    })
+    .catch(err => console.error('Gagal fetch outside:', err));
+}
 
-            // Custom Icon Ungu Berkedip (Pulsing)
-            const highlightIcon = L.divIcon({
-                className: 'custom-marker-icon highlight',
-                html: '<i class="fas fa-bullseye" style="font-size: 14px;"></i>',
-                iconSize: [26, 26],
-                iconAnchor: [13, 13],
-                popupAnchor: [0, -13]
-            });
+// 5. Fetch & Render: Irisan A dan B (Intersection A ∩ B) - Styled in GRAY
+function fetchIntersect(wilayahA, wilayahB, geojsonA, geojsonB) {
+    const lg = subMapLayers.intersect;
+    lg.clearLayers();
+    drawReferenceOutlines(lg, geojsonA, geojsonB);
 
-            const marker = L.marker(latlng, { icon: highlightIcon }).addTo(analysisGroup);
-            marker.bindPopup(`
-                <strong style="color: #a855f7;">[Hasil Spasial]</strong><br>
-                <strong>${m.nama_marker}</strong><br>
-                ${m.deskripsi || 'Tidak ada deskripsi'}
-            `);
-
-            // Buat LatLngBounds untuk disesuaikan
-            const tempBounds = L.latLngBounds([latlng]);
-            bounds.push(tempBounds);
-        });
-    }
-
-    // 4. Update Panel Sidebar dengan hasil detail
-    const panel = document.getElementById('analysis-results-panel');
-    let hasResultGeomText = geomAdded ? "Terbentuk" : "Tidak Terbentuk (Kosong)";
-    
-    panel.innerHTML = `
-        <div class="results-card">
-            <div class="results-title"><i class="fas fa-chart-line"></i> Hasil: ${operationName}</div>
-            <div class="results-stats">
-                <div><strong>Geometri Hasil:</strong> <span style="color: ${geomAdded ? 'var(--success)' : 'var(--danger)'};">${hasResultGeomText}</span></div>
-                <div><strong>Jumlah Marker Terpilih:</strong> <span style="color: var(--brand-color); font-weight: bold;">${countMarkers} Titik</span></div>
-            </div>
-            ${countMarkers > 0 ? `
-                <div style="margin-top: 0.75rem; border-top: 1px solid var(--border-color); padding-top: 0.5rem;">
-                    <div style="font-size: 0.75rem; font-weight: bold; margin-bottom: 0.25rem;">Daftar Marker Lolos:</div>
-                    <ul style="list-style: none; display: flex; flex-direction: column; gap: 0.25rem; max-height: 120px; overflow-y: auto;">
-                        ${data.markers.map(m => `
-                            <li style="font-size: 0.75rem; display: flex; align-items: center; justify-content: space-between; background: var(--bg-primary); padding: 0.25rem 0.5rem; border-radius: 0.25rem;">
-                                <span><i class="fas fa-bullseye" style="color: #a855f7;"></i> ${m.nama_marker}</span>
-                            </li>
-                        `).join('')}
-                    </ul>
-                </div>
-            ` : `<div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem;">Tidak ada marker di dalam area hasil.</div>`}
-            <button class="btn btn-outline btn-sm" style="width: 100%; margin-top: 0.75rem; justify-content: center;" onclick="resetAnalysisUI()">
-                <i class="fas fa-undo"></i> Reset Hasil
-            </button>
-        </div>
-    `;
-
-    // 5. Fit Bounds peta jika ada elemen
-    if (bounds.length > 0) {
-        const combinedBounds = bounds.reduce((acc, cur) => acc.extend(cur));
-        map.fitBounds(combinedBounds, { padding: [50, 50] });
-    } else {
-        alert("Analisis berhasil, namun tidak menghasilkan area koordinat (Disjoint/Kosong) dan tidak ada marker terpilih.");
-    }
+    fetch('api/analysis_intersection.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wilayah_a: wilayahA, wilayah_b: wilayahB })
+    })
+    .then(res => res.json())
+    .then(res => {
+        if (res.status === 'success') {
+            document.getElementById('badge-intersect').innerText = (res.markers ? res.markers.length : 0) + ' Titik';
+            
+            // Gambar geometri irisan (warna ABU-ABU sesuai request user)
+            if (res.geometry) {
+                L.geoJSON(res.geometry, {
+                    style: { color: '#64748b', weight: 2.5, fillColor: '#cbd5e1', fillOpacity: 0.45 }
+                }).addTo(lg);
+            }
+            
+            // Gambar marker (warna ABU-ABU)
+            if (res.markers) {
+                res.markers.forEach(m => {
+                    const coords = m.geojson.coordinates;
+                    L.marker([coords[1], coords[0]], { icon: getColoredMarkerIcon('#64748b') })
+                     .bindPopup(`<strong>${m.nama_marker}</strong><br>Irisan Wilayah A & B`)
+                     .addTo(lg);
+                });
+            }
+        }
+    })
+    .catch(err => console.error('Gagal fetch intersection:', err));
 }

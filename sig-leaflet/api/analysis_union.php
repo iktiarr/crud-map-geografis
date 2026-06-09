@@ -1,5 +1,5 @@
 <?php
-// api/analysis_outside.php
+// api/analysis_union.php
 header('Content-Type: application/json');
 $pdo = require __DIR__ . '/../config/database.php';
 
@@ -13,7 +13,7 @@ if (empty($wilayah_a) || empty($wilayah_b)) {
 }
 
 try {
-    // 1. Hitung area di luar A dan B menggunakan Bounding Box Seluruh Dunia: Envelope(-180, -90, 180, 90) - (A U B)
+    // 1. Hitung gabungan wilayah (A U B)
     $query_geom = "
         WITH selected AS (
             SELECT
@@ -23,22 +23,9 @@ try {
             JOIN wilayah b ON a.group_id = b.group_id
             WHERE a.id = :wilayah_a
             AND b.id = :wilayah_b
-        ),
-        world_semesta AS (
-            SELECT
-                ST_SetSRID(ST_MakeEnvelope(-180, -90, 180, 90), 4326) AS boundary_geom,
-                geom_a,
-                geom_b
-            FROM selected
-            GROUP BY geom_a, geom_b
         )
-        SELECT ST_AsGeoJSON(
-            ST_Difference(
-                boundary_geom,
-                ST_Union(geom_a, geom_b)
-            )
-        ) AS geojson
-        FROM world_semesta;
+        SELECT ST_AsGeoJSON(ST_Union(geom_a, geom_b)) AS geojson
+        FROM selected;
     ";
     
     $stmt = $pdo->prepare($query_geom);
@@ -48,27 +35,16 @@ try {
     ]);
     $result_geom = $stmt->fetchColumn();
 
-    // 2. Ambil marker yang berada di luar area A dan B tetapi tetap dalam lingkup group_id
+    // 2. Ambil marker yang berada di dalam gabungan
     $query_markers = "
         WITH selected AS (
             SELECT
-                a.geom AS geom_a,
-                b.geom AS geom_b,
+                ST_Union(a.geom, b.geom) AS hasil_geom,
                 a.group_id
             FROM wilayah a
             JOIN wilayah b ON a.group_id = b.group_id
             WHERE a.id = :wilayah_a
             AND b.id = :wilayah_b
-        ),
-        world_semesta AS (
-            SELECT
-                ST_Difference(
-                    ST_SetSRID(ST_MakeEnvelope(-180, -90, 180, 90), 4326),
-                    ST_Union(geom_a, geom_b)
-                ) AS hasil_geom,
-                group_id
-            FROM selected
-            GROUP BY geom_a, geom_b, group_id
         )
         SELECT 
             m.id,
@@ -76,8 +52,8 @@ try {
             m.deskripsi,
             ST_AsGeoJSON(m.geom) AS geojson
         FROM markers m
-        JOIN world_semesta w ON m.group_id = w.group_id
-        WHERE ST_Within(m.geom, w.hasil_geom);
+        JOIN selected s ON m.group_id = s.group_id
+        WHERE ST_Within(m.geom, s.hasil_geom);
     ";
 
     $stmt_markers = $pdo->prepare($query_markers);
@@ -93,13 +69,13 @@ try {
 
     echo json_encode([
         'status' => 'success',
-        'operation' => 'outside',
+        'operation' => 'union',
         'geometry' => $result_geom ? json_decode($result_geom) : null,
         'markers' => $markers
     ]);
 } catch (Exception $e) {
     echo json_encode([
         'status' => 'error',
-        'message' => 'Gagal melakukan analisis area luar: ' . $e->getMessage()
+        'message' => 'Gagal melakukan analisis gabungan: ' . $e->getMessage()
     ]);
 }

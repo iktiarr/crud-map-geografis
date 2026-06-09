@@ -6,6 +6,24 @@ let drawHandler = null;
 let wilayahCount = 0;
 let markerCount = 0;
 
+// Sub-maps objects
+let subMaps = {
+    union: null,
+    diffAB: null,
+    diffBA: null,
+    outside: null,
+    intersect: null
+};
+
+// Sub-maps layer groups
+let subMapLayers = {
+    union: L.layerGroup(),
+    diffAB: L.layerGroup(),
+    diffBA: L.layerGroup(),
+    outside: L.layerGroup(),
+    intersect: L.layerGroup()
+};
+
 // Fungsi pembantu untuk mengonversi index angka menjadi huruf (0 -> A, 1 -> B, 26 -> AA)
 function getLetterName(num) {
     const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -17,8 +35,7 @@ function getLetterName(num) {
     return first + second;
 }
 
-// Layer Groups
-let boundaryLayer = null;
+// Layer Groups Peta Utama
 const wilayahGroup = L.layerGroup();
 const markerGroup = L.layerGroup();
 const analysisGroup = L.layerGroup();
@@ -26,28 +43,34 @@ const analysisGroup = L.layerGroup();
 // Icon Marker Kustom
 const customMarkerIcon = L.divIcon({
     className: 'custom-marker-icon',
-    html: '<i class="fas fa-map-marker-alt"></i>',
-    iconSize: [30, 30],
-    iconAnchor: [15, 30],
-    popupAnchor: [0, -30]
+    html: '<div style="width: 10px; height: 10px; border-radius:50%; background:#fff;"></div>',
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+    popupAnchor: [0, -10]
 });
 
-// Inisialisasi Peta
+// Inisialisasi Peta Utama & Sub-maps
 function initMap() {
-    // Tentukan koordinat default (Indonesia / Jakarta jika data masih kosong)
     map = L.map('map').setView([-6.2088, 106.8456], 13);
 
-    // Layer jalanan terang (OSM)
-    const baseLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    // Layer jalanan terang (OSM Voyager)
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
         subdomains: 'abcd',
         maxZoom: 20
     }).addTo(map);
 
-    // Tambahkan layer group ke peta
+    // Tambahkan layer group ke peta utama
     wilayahGroup.addTo(map);
     markerGroup.addTo(map);
     analysisGroup.addTo(map);
+
+    // Inisialisasi 5 sub-maps hasil himpunan
+    initSubMaps();
+
+    // Sinkronisasi view dari sub-maps ketika peta utama digeser atau dizoom
+    map.on('move', syncSubMapsView);
+    map.on('zoomend', syncSubMapsView);
 
     // Event Listener Leaflet Draw saat menggambar selesai
     map.on(L.Draw.Event.CREATED, function (e) {
@@ -55,9 +78,7 @@ function initMap() {
         const layer = e.layer;
         const geojson = layer.toGeoJSON().geometry;
 
-        if (type === 'boundary') {
-            saveBoundary("Batas Acuan", geojson);
-        } else if (type === 'wilayah') {
+        if (type === 'wilayah') {
             const name = "Wilayah " + getLetterName(wilayahCount);
             saveWilayah(name, geojson);
         } else if (type === 'marker') {
@@ -78,25 +99,54 @@ function initMap() {
     loadGroupData();
 }
 
+// Inisialisasi sub-maps
+function initSubMaps() {
+    const subMapIds = {
+        union: 'sub-map-union',
+        diffAB: 'sub-map-diff-ab',
+        diffBA: 'sub-map-diff-ba',
+        outside: 'sub-map-outside',
+        intersect: 'sub-map-intersect'
+    };
+
+    for (const key in subMapIds) {
+        subMaps[key] = L.map(subMapIds[key], {
+            zoomControl: false,
+            dragging: false,
+            scrollWheelZoom: false,
+            doubleClickZoom: false,
+            boxZoom: false,
+            touchZoom: false,
+            keyboard: false
+        }).setView([-6.2088, 106.8456], 13);
+
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            maxZoom: 20
+        }).addTo(subMaps[key]);
+
+        // Tambahkan layer group pendukung ke sub-maps
+        subMapLayers[key].addTo(subMaps[key]);
+    }
+}
+
+// Sinkronkan koordinat dan zoom level sub-maps dengan peta utama
+function syncSubMapsView() {
+    const center = map.getCenter();
+    const zoom = map.getZoom();
+    for (const key in subMaps) {
+        if (subMaps[key]) {
+            subMaps[key].setView(center, zoom, { animate: false });
+        }
+    }
+}
+
 // Aktifkan mode menggambar kustom
 function startDrawing(type) {
     if (drawHandler) drawHandler.disable();
 
     const instructionEl = document.getElementById('draw-instruction');
     
-    if (type === 'boundary') {
-        instructionEl.innerText = "Klik pada peta untuk mulai menggambar batas acuan (polygon). Double-klik untuk menyelesaikan.";
-        instructionEl.style.display = 'block';
-        drawHandler = new L.Draw.Polygon(map, {
-            shapeOptions: {
-                color: '#e11d48',
-                weight: 3,
-                dashArray: '6, 6',
-                fillOpacity: 0.05
-            }
-        });
-        drawHandler.drawingType = 'boundary';
-    } else if (type === 'wilayah') {
+    if (type === 'wilayah') {
         instructionEl.innerText = "Klik pada peta untuk mulai menggambar wilayah (polygon). Double-klik untuk menyelesaikan.";
         instructionEl.style.display = 'block';
         drawHandler = new L.Draw.Polygon(map, {
@@ -119,7 +169,7 @@ function startDrawing(type) {
     drawHandler.enable();
 }
 
-// Memuat data Boundary, Wilayah, dan Marker dari database
+// Memuat data Wilayah dan Marker dari database
 function loadGroupData() {
     fetch(`api/get_group_data.php?group_id=${GROUP_ID}`)
         .then(res => res.json())
@@ -136,24 +186,28 @@ function loadGroupData() {
         });
 }
 
-// Menampilkan data wilayah dan marker di peta
+// Menampilkan data wilayah dan marker di peta utama
 function renderGroupData(data) {
     // Simpan jumlah wilayah & marker untuk penamaan otomatis
     wilayahCount = data.wilayah ? data.wilayah.length : 0;
     markerCount = data.markers ? data.markers.length : 0;
 
-    // 1. Bersihkan Layer yang Ada
+    // 1. Bersihkan Layer yang Ada di peta utama
     wilayahGroup.clearLayers();
     markerGroup.clearLayers();
     analysisGroup.clearLayers();
     
     const bounds = [];
 
-    // 3. Gambar Semua Wilayah (Polygons)
+    // 2. Gambar Semua Wilayah (Polygons)
     const dropdownA = document.getElementById('wilayah_a');
     const dropdownB = document.getElementById('wilayah_b');
     const wilayahList = document.getElementById('wilayah-list');
     
+    // Simpan data ID pilihan saat ini agar tidak ter-reset saat di-refresh
+    const prevSelectedA = dropdownA.value;
+    const prevSelectedB = dropdownB.value;
+
     // Reset dropdown & lists
     dropdownA.innerHTML = '<option value="">-- Pilih Wilayah A --</option>';
     dropdownB.innerHTML = '<option value="">-- Pilih Wilayah B --</option>';
@@ -165,24 +219,26 @@ function renderGroupData(data) {
             const optA = document.createElement('option');
             optA.value = w.id;
             optA.innerText = w.nama_wilayah;
+            if (w.id == prevSelectedA) optA.selected = true;
             dropdownA.appendChild(optA);
 
             const optB = document.createElement('option');
             optB.value = w.id;
             optB.innerText = w.nama_wilayah;
+            if (w.id == prevSelectedB) optB.selected = true;
             dropdownB.appendChild(optB);
 
-            // Tentukan warna wilayah (kita ganti-ganti warnanya)
-            const colors = ['#2563eb', '#10b981', '#f59e0b', '#06b6d4', '#ec4899'];
+            // Tentukan warna wilayah berbeda secara dinamis
+            const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#06b6d4', '#ec4899', '#8b5cf6'];
             const color = colors[index % colors.length];
 
-            // Render ke Peta
+            // Render ke Peta Utama
             const layer = L.geoJSON(w.geojson, {
                 style: {
                     color: color,
-                    weight: 2,
+                    weight: 2.5,
                     fillColor: color,
-                    fillOpacity: 0.15
+                    fillOpacity: 0.18
                 }
             }).addTo(wilayahGroup);
             layer.wilayahId = w.id;
@@ -197,12 +253,15 @@ function renderGroupData(data) {
             layer.bindPopup(`<strong>${w.nama_wilayah}</strong>`);
             bounds.push(layer.getBounds());
 
-            // Tampilkan di sidebar list
+            // Tampilkan di sidebar list dengan tombol Ubah dan Hapus
             wilayahList.innerHTML += `
                 <li class="element-item">
                     <span class="element-name" style="color: ${color};"><i class="fas fa-draw-polygon"></i> ${w.nama_wilayah}</span>
-                    <div style="display: flex; align-items: center; gap: 0.35rem;">
-                        <span class="badge-a" style="background-color: ${color};">Wilayah</span>
+                    <div style="display: flex; align-items: center; gap: 0.25rem;">
+                        <span class="badge-a" style="background-color: ${color}; font-size: 0.65rem;">Wilayah</span>
+                        <button class="btn btn-outline btn-sm" onclick="editWilayah(${w.id}, '${w.nama_wilayah}')" style="padding: 0.15rem 0.35rem; font-size: 0.7rem; color: var(--warning); border-color: var(--warning);" title="Ubah Nama">
+                            <i class="fas fa-edit"></i>
+                        </button>
                         <button class="btn btn-danger btn-sm" onclick="deleteWilayah(${w.id}, '${w.nama_wilayah}')" style="padding: 0.15rem 0.35rem; font-size: 0.7rem;" title="Hapus Wilayah">
                             <i class="fas fa-trash"></i>
                         </button>
@@ -218,36 +277,28 @@ function renderGroupData(data) {
         `;
     }
 
-    // 4. Gambar Semua Marker (Points)
+    // 3. Gambar Semua Marker (Points)
     const markerListEl = document.getElementById('marker-list');
     markerListEl.innerHTML = '';
 
     if (data.markers && data.markers.length > 0) {
         data.markers.forEach(m => {
-            // Dapatkan koordinat GeoJSON Point [Lng, Lat]
             const coords = m.geojson.coordinates;
-            // Leaflet butuh [Lat, Lng]
             const latlng = [coords[1], coords[0]];
 
-            // Custom HTML marker icon
-            const markerIcon = L.divIcon({
-                className: `custom-marker-icon marker-item-${m.id}`,
-                html: '<div style="width: 10px; height: 10px; border-radius:50%; background:#fff;"></div>',
-                iconSize: [20, 20],
-                iconAnchor: [10, 10],
-                popupAnchor: [0, -10]
-            });
-
-            const marker = L.marker(latlng, { icon: markerIcon }).addTo(markerGroup);
+            const marker = L.marker(latlng, { icon: customMarkerIcon }).addTo(markerGroup);
             marker.markerId = m.id;
-            marker.bindPopup(`<strong>${m.nama_marker}</strong><br>${m.deskripsi || 'Tidak ada deskripsi'}`);
+            marker.bindPopup(`<strong>${m.nama_marker}</strong>`);
 
-            // Tampilkan di list sidebar
+            // Tampilkan di list sidebar dengan tombol Ubah dan Hapus
             markerListEl.innerHTML += `
                 <li class="element-item">
                     <span class="element-name" style="color: var(--brand-color);"><i class="fas fa-map-marker-alt"></i> ${m.nama_marker}</span>
-                    <div style="display: flex; align-items: center; gap: 0.35rem;">
-                        <span class="badge-a" style="background-color: var(--brand-color);">Marker</span>
+                    <div style="display: flex; align-items: center; gap: 0.25rem;">
+                        <span class="badge-a" style="background-color: var(--brand-color); font-size: 0.65rem;">Marker</span>
+                        <button class="btn btn-outline btn-sm" onclick="editMarker(${m.id}, '${m.nama_marker}')" style="padding: 0.15rem 0.35rem; font-size: 0.7rem; color: var(--warning); border-color: var(--warning);" title="Ubah Nama">
+                            <i class="fas fa-edit"></i>
+                        </button>
                         <button class="btn btn-danger btn-sm" onclick="deleteMarker(${m.id}, '${m.nama_marker}')" style="padding: 0.15rem 0.35rem; font-size: 0.7rem;" title="Hapus Marker">
                             <i class="fas fa-trash"></i>
                         </button>
@@ -263,37 +314,16 @@ function renderGroupData(data) {
         `;
     }
 
-    // 5. Sesuaikan Zoom Peta agar semua layer terlihat
+    // 4. Sesuaikan Zoom Peta agar semua layer terlihat
     if (bounds.length > 0) {
         const combinedBounds = bounds.reduce((acc, cur) => acc.extend(cur));
         map.fitBounds(combinedBounds, { padding: [40, 40] });
     }
-}
 
-// Simpan Boundary ke Server
-function saveBoundary(name, geojson) {
-    fetch('api/save_boundary.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            group_id: GROUP_ID,
-            nama_boundary: name,
-            geojson: geojson
-        })
-    })
-    .then(res => res.json())
-    .then(res => {
-        if (res.status === 'success') {
-            alert(res.message);
-            loadGroupData();
-        } else {
-            alert('Gagal menyimpan: ' + res.message);
-        }
-    })
-    .catch(err => {
-        console.error(err);
-        alert('Terjadi kesalahan saat menyimpan boundary.');
-    });
+    // 5. Trigger analisis ulang jika Wilayah A dan B sudah dipilih untuk mensinkronkan sub-maps
+    if (typeof triggerAnalysisSync === 'function') {
+        triggerAnalysisSync();
+    }
 }
 
 // Simpan Wilayah ke Server
@@ -310,7 +340,6 @@ function saveWilayah(name, geojson) {
     .then(res => res.json())
     .then(res => {
         if (res.status === 'success') {
-            alert(res.message);
             loadGroupData();
         } else {
             alert('Gagal menyimpan: ' + res.message);
@@ -337,7 +366,6 @@ function saveMarker(name, desc, geojson) {
     .then(res => res.json())
     .then(res => {
         if (res.status === 'success') {
-            alert(res.message);
             loadGroupData();
         } else {
             alert('Gagal menyimpan: ' + res.message);
@@ -393,6 +421,54 @@ function deleteMarker(id, name) {
             alert('Terjadi kesalahan saat menghapus marker.');
         });
     }
+}
+
+// Edit nama wilayah
+function editWilayah(id, currentName) {
+    const newName = prompt("Ubah nama wilayah:", currentName);
+    if (newName === null || newName.trim() === '') return;
+    
+    fetch('api/update_wilayah.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: id, nama_wilayah: newName.trim() })
+    })
+    .then(res => res.json())
+    .then(res => {
+        if (res.status === 'success') {
+            loadGroupData();
+        } else {
+            alert('Gagal mengubah wilayah: ' + res.message);
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        alert('Terjadi kesalahan saat mengubah wilayah.');
+    });
+}
+
+// Edit nama marker
+function editMarker(id, currentName) {
+    const newName = prompt("Ubah nama marker:", currentName);
+    if (newName === null || newName.trim() === '') return;
+    
+    fetch('api/update_marker.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: id, nama_marker: newName.trim() })
+    })
+    .then(res => res.json())
+    .then(res => {
+        if (res.status === 'success') {
+            loadGroupData();
+        } else {
+            alert('Gagal mengubah marker: ' + res.message);
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        alert('Terjadi kesalahan saat mengubah marker.');
+    });
 }
 
 // Jalankan saat halaman terisi
