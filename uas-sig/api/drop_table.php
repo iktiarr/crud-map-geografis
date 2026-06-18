@@ -35,6 +35,13 @@ try {
     // Drop table safely
     $pdo->exec("DROP TABLE IF EXISTS \"" . $cleanTable . "\" CASCADE;");
     
+    // Cleanup import_metadata
+    try {
+        $pdo->exec("DELETE FROM import_metadata WHERE table_name = " . $pdo->quote($cleanTable));
+    } catch (Exception $metaErr) {
+        // Ignore if import_metadata doesn't exist
+    }
+    
     echo json_encode([
         'status' => 'success', 
         'message' => "Tabel '{$cleanTable}' berhasil dihapus dari database."

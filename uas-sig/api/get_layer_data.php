@@ -15,46 +15,27 @@ if (empty($table)) {
 }
 
 try {
-    // 1. Cek apakah tabel ada di database
-    $check = $pdo->prepare("
-        SELECT EXISTS (
-            SELECT FROM information_schema.tables 
-            WHERE table_schema = 'public' 
-              AND table_name = :table
-        )
-    ");
-    $check->execute([':table' => $table]);
-    if (!$check->fetchColumn()) {
-        echo json_encode(['status' => 'error', 'message' => "Tabel '$table' tidak ditemukan"]); exit;
-    }
-
-    // 2. Ambil semua kolom kecuali 'geom'
+    // Ambil semua kolom tabel dari system catalogs dalam 1 query saja (jauh lebih cepat daripada information_schema views)
     $colStmt = $pdo->prepare("
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_schema = 'public' 
-          AND table_name = :table
-          AND column_name != 'geom'
-        ORDER BY ordinal_position
+        SELECT a.attname AS column_name
+        FROM pg_attribute a
+        JOIN pg_class c ON a.attrelid = c.oid
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE n.nspname = 'public'
+          AND c.relname = :table
+          AND a.attnum > 0
+          AND NOT a.attisdropped
+        ORDER BY a.attnum
     ");
     $colStmt->execute([':table' => $table]);
-    $columns = $colStmt->fetchAll(PDO::FETCH_COLUMN);
+    $allColumns = $colStmt->fetchAll(PDO::FETCH_COLUMN);
 
-    if (empty($columns)) {
-        echo json_encode(['status' => 'error', 'message' => 'Tabel tidak memiliki kolom data']); exit;
+    if (empty($allColumns)) {
+        echo json_encode(['status' => 'error', 'message' => "Tabel '$table' tidak ditemukan atau tidak memiliki kolom data"]); exit;
     }
 
-    // 3. Cek apakah ada kolom geom
-    $geomCheck = $pdo->prepare("
-        SELECT EXISTS (
-            SELECT FROM information_schema.columns 
-            WHERE table_schema = 'public' 
-              AND table_name = :table
-              AND column_name = 'geom'
-        )
-    ");
-    $geomCheck->execute([':table' => $table]);
-    $hasGeom = $geomCheck->fetchColumn();
+    $hasGeom = in_array('geom', $allColumns);
+    $columns = array_values(array_filter($allColumns, function($c) { return $c !== 'geom'; }));
 
     // 4. Bangun query dinamis
     $selectCols = [];

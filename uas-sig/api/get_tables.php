@@ -31,7 +31,45 @@ try {
         }
     }
     
+    // Ambil kolom kandidat untuk semua tabel sekaligus untuk meminimalkan query metadata
+    $tableColumns = [];
+    if (!empty($rows)) {
+        $tableNames = array_column($rows, 'table_name');
+        $placeholders = implode(',', array_fill(0, count($tableNames), '?'));
+        
+        $colQuery = "
+            SELECT c.relname AS table_name, a.attname AS column_name
+            FROM pg_attribute a
+            JOIN pg_class c ON a.attrelid = c.oid
+            JOIN pg_namespace n ON c.relnamespace = n.oid
+            WHERE n.nspname = 'public'
+              AND c.relname IN ($placeholders)
+              AND a.attnum > 0
+              AND NOT a.attisdropped
+              AND a.attname IN ('jenis', 'klasifikasi', 'tipe', 'kategori', 'status', 'type', 'class', 'category', 'classification')
+            ORDER BY a.attnum
+        ";
+        
+        $colStmt = $pdo->prepare($colQuery);
+        $colStmt->execute($tableNames);
+        $allCols = $colStmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        foreach ($allCols as $c) {
+            $tableColumns[$c['table_name']][] = $c['column_name'];
+        }
+    }
+
+    // Ensure import_metadata table exists
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS import_metadata (
+            table_name VARCHAR(255) PRIMARY KEY,
+            files VARCHAR(255) NOT NULL
+        )
+    ");
+
     $resultTables = [];
+    $candidateCols = ['jenis', 'klasifikasi', 'tipe', 'kategori', 'status', 'type', 'class', 'category', 'classification'];
+    
     foreach ($rows as $row) {
         $tableName = $row['table_name'];
         $type = $row['type'];
@@ -40,18 +78,9 @@ try {
         $hasJenis = false;
         $categoryColumn = null;
         
-        $candidateCols = ['jenis', 'klasifikasi', 'tipe', 'kategori', 'status', 'type', 'class', 'category', 'classification'];
-        
+        $cols = $tableColumns[$tableName] ?? [];
         foreach ($candidateCols as $col) {
-            $colCheck = $pdo->prepare("
-                SELECT COUNT(*) 
-                FROM information_schema.columns 
-                WHERE table_schema = 'public' 
-                  AND table_name = ? 
-                  AND column_name = ?
-            ");
-            $colCheck->execute([$tableName, $col]);
-            if ($colCheck->fetchColumn() > 0) {
+            if (in_array($col, $cols)) {
                 $hasJenis = true;
                 $categoryColumn = $col;
                 break;
@@ -61,7 +90,6 @@ try {
         if ($hasJenis && $categoryColumn) {
             try {
                 // Ambil distinct jenis dari tabel tersebut
-                // Karena nama tabel divalidasi dari list geometry_columns, ini aman dari SQL injection
                 $stmt = $pdo->query("
                     SELECT DISTINCT \"{$categoryColumn}\" 
                     FROM \"{$tableName}\" 
@@ -71,6 +99,66 @@ try {
                 $jenisList = $stmt->fetchAll(PDO::FETCH_COLUMN);
             } catch (Exception $e) {
                 $jenisList = [];
+            }
+        }
+        
+        // Jika tidak memiliki jenis/kategori dinamis, kita tampilkan komponen file terunggah (.shp, .dbf, .prj, .shx)
+        if (empty($jenisList)) {
+            // Cek di import_metadata
+            $metaStmt = $pdo->prepare("SELECT files FROM import_metadata WHERE table_name = ?");
+            $metaStmt->execute([$tableName]);
+            $metaFiles = $metaStmt->fetchColumn();
+            
+            if ($metaFiles !== false) {
+                if (!empty($metaFiles)) {
+                    $parts = explode(',', $metaFiles);
+                    foreach ($parts as $p) {
+                        $jenisList[] = '.' . trim($p);
+                    }
+                    $hasJenis = true;
+                    $categoryColumn = '__component__';
+                }
+            } else {
+                // Deteksi dinamis columns
+                try {
+                    $colCheck = $pdo->prepare("
+                        SELECT column_name 
+                        FROM information_schema.columns 
+                        WHERE table_schema = 'public' 
+                          AND table_name = ?
+                    ");
+                    $colCheck->execute([$tableName]);
+                    $allTableCols = $colCheck->fetchAll(PDO::FETCH_COLUMN);
+                    
+                    $hasGeom = in_array('geom', $allTableCols) || in_array('geometry', $allTableCols);
+                    $hasAttrs = false;
+                    foreach ($allTableCols as $c) {
+                        if (!in_array($c, ['id', 'geom', 'geometry', 'created_at', 'updated_at'])) {
+                            $hasAttrs = true;
+                            break;
+                        }
+                    }
+                    
+                    $detected = [];
+                    if ($hasGeom) {
+                        $detected[] = '.shp';
+                    }
+                    if ($hasAttrs) {
+                        $detected[] = '.dbf';
+                    }
+                    if ($hasGeom) {
+                        $detected[] = '.prj';
+                        $detected[] = '.shx';
+                    }
+                    
+                    if (!empty($detected)) {
+                        $jenisList = $detected;
+                        $hasJenis = true;
+                        $categoryColumn = '__component__';
+                    }
+                } catch (Exception $colErr) {
+                    // Abaikan error deteksi kolom
+                }
             }
         }
         

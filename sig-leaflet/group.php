@@ -133,17 +133,45 @@ try {
                 </div>
             </div>
 
-            <!-- 5 Visual Maps Hasil Analisis di Bawah -->
+            <!-- 7 Visual Maps Hasil Analisis di Bawah -->
             <div class="sub-maps-section">
                 <h3 class="sub-maps-section-title">
                     <i class="fas fa-th-large"></i> Hasil Visualisasi Spasial Himpunan
                 </h3>
                 
                 <div class="sub-maps-grid">
-                    <!-- Map 1: Union (A dan B) -->
+                    <!-- Map 1: Wilayah A (Asli) -->
                     <div class="sub-map-card">
                         <h4>
-                            <span>1. Wilayah A dan B (Union)</span>
+                            <span>1. Wilayah A (Asli)</span>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span id="badge-wilayah-a" class="badge">0 Titik</span>
+                                <button class="btn btn-outline btn-sm" onclick="triggerAnalysisSync()" style="padding: 0.15rem 0.35rem; font-size: 0.7rem;" title="Refresh">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                            </div>
+                        </h4>
+                        <div id="sub-map-wilayah-a" class="sub-map-container"></div>
+                    </div>
+
+                    <!-- Map 2: Wilayah B (Asli) -->
+                    <div class="sub-map-card">
+                        <h4>
+                            <span>2. Wilayah B (Asli)</span>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span id="badge-wilayah-b" class="badge">0 Titik</span>
+                                <button class="btn btn-outline btn-sm" onclick="triggerAnalysisSync()" style="padding: 0.15rem 0.35rem; font-size: 0.7rem;" title="Refresh">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                            </div>
+                        </h4>
+                        <div id="sub-map-wilayah-b" class="sub-map-container"></div>
+                    </div>
+
+                    <!-- Map 3: Union (A dan B) -->
+                    <div class="sub-map-card">
+                        <h4>
+                            <span>3. Wilayah A dan B (Union)</span>
                             <div style="display: flex; align-items: center; gap: 0.5rem;">
                                 <span id="badge-union" class="badge">0 Titik</span>
                                 <button class="btn btn-outline btn-sm" onclick="triggerAnalysisSync()" style="padding: 0.15rem 0.35rem; font-size: 0.7rem;" title="Refresh">
@@ -154,10 +182,10 @@ try {
                         <div id="sub-map-union" class="sub-map-container"></div>
                     </div>
 
-                    <!-- Map 2: A - B -->
+                    <!-- Map 4: A - B -->
                     <div class="sub-map-card">
                         <h4>
-                            <span>2. Wilayah A tapi bukan B</span>
+                            <span>4. Wilayah A tapi bukan B</span>
                             <div style="display: flex; align-items: center; gap: 0.5rem;">
                                 <span id="badge-diff-ab" class="badge">0 Titik</span>
                                 <button class="btn btn-outline btn-sm" onclick="triggerAnalysisSync()" style="padding: 0.15rem 0.35rem; font-size: 0.7rem;" title="Refresh">
@@ -168,10 +196,10 @@ try {
                         <div id="sub-map-diff-ab" class="sub-map-container"></div>
                     </div>
 
-                    <!-- Map 3: B - A -->
+                    <!-- Map 5: B - A -->
                     <div class="sub-map-card">
                         <h4>
-                            <span>3. Wilayah B tapi bukan A</span>
+                            <span>5. Wilayah B tapi bukan A</span>
                             <div style="display: flex; align-items: center; gap: 0.5rem;">
                                 <span id="badge-diff-ba" class="badge">0 Titik</span>
                                 <button class="btn btn-outline btn-sm" onclick="triggerAnalysisSync()" style="padding: 0.15rem 0.35rem; font-size: 0.7rem;" title="Refresh">
@@ -182,10 +210,10 @@ try {
                         <div id="sub-map-diff-ba" class="sub-map-container"></div>
                     </div>
 
-                    <!-- Map 4: Outside A dan B -->
+                    <!-- Map 6: Outside A dan B -->
                     <div class="sub-map-card">
                         <h4>
-                            <span>4. Selain Wilayah A dan B</span>
+                            <span>6. Selain Wilayah A dan B</span>
                             <div style="display: flex; align-items: center; gap: 0.5rem;">
                                 <span id="badge-outside" class="badge">0 Titik</span>
                                 <button class="btn btn-outline btn-sm" onclick="triggerAnalysisSync()" style="padding: 0.15rem 0.35rem; font-size: 0.7rem;" title="Refresh">
@@ -196,10 +224,10 @@ try {
                         <div id="sub-map-outside" class="sub-map-container"></div>
                     </div>
 
-                    <!-- Map 5: Intersection (Irisan) -->
+                    <!-- Map 7: Intersection (Irisan) -->
                     <div class="sub-map-card">
                         <h4>
-                            <span>5. Irisan A dan B (Gray Style)</span>
+                            <span>7. Irisan A dan B (Gray Style)</span>
                             <div style="display: flex; align-items: center; gap: 0.5rem;">
                                 <span id="badge-intersect" class="badge">0 Titik</span>
                                 <button class="btn btn-outline btn-sm" onclick="triggerAnalysisSync()" style="padding: 0.15rem 0.35rem; font-size: 0.7rem;" title="Refresh">

@@ -178,6 +178,28 @@ try {
             $errors[] = "Baris " . ($i+1) . ": " . $rowErr->getMessage();
         }
     }
+    // Save to import_metadata
+    $uploaded_files = [];
+    if (!empty($_FILES['shp']['tmp_name'])) $uploaded_files[] = 'shp';
+    if (!empty($_FILES['dbf']['tmp_name'])) $uploaded_files[] = 'dbf';
+    if (!empty($_FILES['prj']['tmp_name'])) $uploaded_files[] = 'prj';
+    if (!empty($_FILES['shx']['tmp_name'])) $uploaded_files[] = 'shx';
+    
+    if (!empty($uploaded_files)) {
+        $files_str = implode(',', $uploaded_files);
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS import_metadata (
+                table_name VARCHAR(255) PRIMARY KEY,
+                files VARCHAR(255) NOT NULL
+            )
+        ");
+        $metaStmt = $pdo->prepare("
+            INSERT INTO import_metadata (table_name, files) 
+            VALUES (:table_name, :files)
+            ON CONFLICT (table_name) DO UPDATE SET files = EXCLUDED.files
+        ");
+        $metaStmt->execute([':table_name' => $target_table, ':files' => $files_str]);
+    }
 
     $pdo->commit();
 

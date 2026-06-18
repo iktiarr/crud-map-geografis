@@ -8,6 +8,8 @@ let markerCount = 0;
 
 // Sub-maps objects
 let subMaps = {
+    wilayahA: null,
+    wilayahB: null,
     union: null,
     diffAB: null,
     diffBA: null,
@@ -17,6 +19,8 @@ let subMaps = {
 
 // Sub-maps layer groups
 let subMapLayers = {
+    wilayahA: L.layerGroup(),
+    wilayahB: L.layerGroup(),
     union: L.layerGroup(),
     diffAB: L.layerGroup(),
     diffBA: L.layerGroup(),
@@ -102,6 +106,8 @@ function initMap() {
 // Inisialisasi sub-maps
 function initSubMaps() {
     const subMapIds = {
+        wilayahA: 'sub-map-wilayah-a',
+        wilayahB: 'sub-map-wilayah-b',
         union: 'sub-map-union',
         diffAB: 'sub-map-diff-ab',
         diffBA: 'sub-map-diff-ba',

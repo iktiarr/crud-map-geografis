@@ -31,7 +31,9 @@ function triggerAnalysisSync() {
         if (layer.wilayahId == wilayahB) geojsonB = layer.toGeoJSON();
     });
 
-    // Jalankan ke-5 query spasial secara bersamaan
+    // Jalankan ke-7 query spasial secara bersamaan
+    fetchWilayahA(wilayahA, geojsonA, geojsonB);
+    fetchWilayahB(wilayahB, geojsonA, geojsonB);
     fetchUnion(wilayahA, wilayahB, geojsonA, geojsonB);
     fetchDiffAB(wilayahA, wilayahB, geojsonA, geojsonB);
     fetchDiffBA(wilayahA, wilayahB, geojsonA, geojsonB);
@@ -46,6 +48,8 @@ function clearAllSubMaps() {
             subMapLayers[key].clearLayers();
         }
     }
+    document.getElementById('badge-wilayah-a').innerText = '0 Titik';
+    document.getElementById('badge-wilayah-b').innerText = '0 Titik';
     document.getElementById('badge-union').innerText = '0 Titik';
     document.getElementById('badge-diff-ab').innerText = '0 Titik';
     document.getElementById('badge-diff-ba').innerText = '0 Titik';
@@ -255,4 +259,78 @@ function fetchIntersect(wilayahA, wilayahB, geojsonA, geojsonB) {
         }
     })
     .catch(err => console.error('Gagal fetch intersection:', err));
+}
+
+// 6. Fetch & Render: Wilayah A (Asli)
+function fetchWilayahA(wilayahA, geojsonA, geojsonB) {
+    const lg = subMapLayers.wilayahA;
+    lg.clearLayers();
+    drawReferenceOutlines(lg, geojsonA, geojsonB);
+
+    fetch('api/analysis_wilayah_a.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wilayah_a: wilayahA })
+    })
+    .then(res => res.json())
+    .then(res => {
+        if (res.status === 'success') {
+            document.getElementById('badge-wilayah-a').innerText = (res.markers ? res.markers.length : 0) + ' Titik';
+            
+            // Gambar geometri Wilayah A (warna biru)
+            if (res.geometry) {
+                L.geoJSON(res.geometry, {
+                    style: { color: '#3b82f6', weight: 2.5, fillColor: '#93c5fd', fillOpacity: 0.25 }
+                }).addTo(lg);
+            }
+            
+            // Gambar marker (warna biru)
+            if (res.markers) {
+                res.markers.forEach(m => {
+                    const coords = m.geojson.coordinates;
+                    L.marker([coords[1], coords[0]], { icon: getColoredMarkerIcon('#3b82f6') })
+                     .bindPopup(`<strong>${m.nama_marker}</strong><br>Berada di Wilayah A`)
+                     .addTo(lg);
+                });
+            }
+        }
+    })
+    .catch(err => console.error('Gagal fetch wilayah A:', err));
+}
+
+// 7. Fetch & Render: Wilayah B (Asli)
+function fetchWilayahB(wilayahB, geojsonA, geojsonB) {
+    const lg = subMapLayers.wilayahB;
+    lg.clearLayers();
+    drawReferenceOutlines(lg, geojsonA, geojsonB);
+
+    fetch('api/analysis_wilayah_b.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wilayah_b: wilayahB })
+    })
+    .then(res => res.json())
+    .then(res => {
+        if (res.status === 'success') {
+            document.getElementById('badge-wilayah-b').innerText = (res.markers ? res.markers.length : 0) + ' Titik';
+            
+            // Gambar geometri Wilayah B (warna merah)
+            if (res.geometry) {
+                L.geoJSON(res.geometry, {
+                    style: { color: '#ef4444', weight: 2.5, fillColor: '#fca5a5', fillOpacity: 0.25 }
+                }).addTo(lg);
+            }
+            
+            // Gambar marker (warna merah)
+            if (res.markers) {
+                res.markers.forEach(m => {
+                    const coords = m.geojson.coordinates;
+                    L.marker([coords[1], coords[0]], { icon: getColoredMarkerIcon('#ef4444') })
+                     .bindPopup(`<strong>${m.nama_marker}</strong><br>Berada di Wilayah B`)
+                     .addTo(lg);
+                });
+            }
+        }
+    })
+    .catch(err => console.error('Gagal fetch wilayah B:', err));
 }
