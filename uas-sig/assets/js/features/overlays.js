@@ -1,9 +1,10 @@
 // =====================================================
 // DYNAMIC OVERLAYS MANAGEMENT (FITUR 1)
 // =====================================================
-let activeOverlays = {}; 
+let activeOverlays = {};
 const OVERLAY_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#ef4444', '#14b8a6'];
 let colorIndex = 0;
+let overlayLayerVisible = false;
 
 function getOverlayColor() {
     const c = OVERLAY_COLORS[colorIndex % OVERLAY_COLORS.length];
@@ -12,41 +13,55 @@ function getOverlayColor() {
 }
 
 function populateOverlayDropdown() {
-    const sel = document.getElementById('overlay-table-select');
-    if (!sel) return;
-    sel.innerHTML = '<option value="">-- Pilih Lapisan --</option>';
-    
+    const options = [];
     tablesList.forEach(t => {
         if (['custom_polygons', 'custom_polylines', 'custom_markers', 'custom_drawings', 'markers'].includes(t.table_name)) return;
         if (!activeOverlays[t.table_name]) {
-            sel.insertAdjacentHTML('beforeend', `<option value="${t.table_name}">${capitalize(t.table_name)} (${t.type})</option>`);
+            options.push({
+                value: t.table_name,
+                label: `${capitalize(t.table_name)} (${t.type})`
+            });
         }
     });
+
+    populateCombobox('combo-overlay', options, (val) => {
+        const hiddenEl = document.getElementById('overlay-table-select');
+        if (hiddenEl) hiddenEl.value = val;
+    });
+
+    if (options.length === 0) {
+        const emptyEl = document.getElementById('combo-overlay-empty');
+        if (emptyEl) {
+            emptyEl.textContent = 'Semua lapisan sudah ditambahkan';
+            emptyEl.style.display = 'block';
+        }
+    }
 }
 
 async function addOverlay() {
-    const sel = document.getElementById('overlay-table-select');
-    if (!sel) return;
-    const table = sel.value;
+    const hiddenEl = document.getElementById('overlay-table-select');
+    if (!hiddenEl) return;
+    const table = hiddenEl.value;
+
     if (!table) {
         toast('Pilih lapisan data terlebih dahulu!', 'warn');
         return;
     }
-    
+
     const loadingEl = document.getElementById('map-loading');
     if (loadingEl) loadingEl.classList.add('show');
-    
+
     try {
         const res = await fetch(`api/get_layer_data.php?table=${table}`);
         const json = await res.json();
-        
+
         if (json.status === 'success') {
             const data = json.data;
             const columns = json.columns;
             const color = getOverlayColor();
-            
+
             const group = L.layerGroup();
-            
+
             data.forEach(row => {
                 if (!row.geometry) return;
                 let layer;
@@ -69,6 +84,24 @@ async function addOverlay() {
                     });
                 } else {
                     layer = L.geoJSON(row.geometry, {
+                        pointToLayer: function(feature, latlng) {
+                            return L.marker(latlng, {
+                                icon: L.divIcon({
+                                    className: '',
+                                    iconSize:  [18, 18],
+                                    iconAnchor:[9, 9],
+                                    popupAnchor:[0, -9],
+                                    html: `
+                                        <div style="
+                                            width:18px; height:18px;
+                                            background:${color};
+                                            border-radius:50%;
+                                            border:2.5px solid #fff;
+                                            box-shadow:0 1px 4px rgba(0,0,0,0.3);
+                                        "></div>`
+                                })
+                            });
+                        },
                         style: {
                             color: color,
                             weight: 2.5,
@@ -77,7 +110,7 @@ async function addOverlay() {
                         }
                     });
                 }
-                
+
                 let popupContent = `<div class="popup-title"><b>Detail Overlay (${capitalize(table)})</b></div>`;
                 for (const [key, val] of Object.entries(row)) {
                     if (!['id', 'geometry', 'geom_type', 'latitude', 'longitude', 'kecamatan_id'].includes(key)) {
@@ -87,39 +120,35 @@ async function addOverlay() {
                 layer.bindPopup(popupContent, { maxWidth: 280 });
                 group.addLayer(layer);
             });
-            
-            group.addTo(overlayLayer);
-            
+
+            if (overlayLayerVisible) {
+                group.addTo(overlayLayer);
+            }
+
             activeOverlays[table] = {
                 layer: group,
                 color: color,
                 data: data,
                 columns: columns
             };
-            
-            // Show data in the bottom results panel
+
+            // Show data in results panel
             activeData = data;
             activeColumns = columns;
             currentPage = 1;
             const titleEl = document.getElementById('results-title');
-            if (titleEl) {
-                titleEl.innerHTML = `<i class="fas fa-layer-group"></i> Lapisan ${capitalize(table)}`;
-            }
+            if (titleEl) titleEl.innerHTML = `<i class="fas fa-layer-group"></i> Lapisan ${capitalize(table)}`;
             const countEl = document.getElementById('result-count');
-            if (countEl) {
-                countEl.textContent = `${activeData.length} data`;
-            }
-            
-            if (typeof setupFeatureFilters === 'function') {
-                setupFeatureFilters(null); // Hide filter card when viewing static overlay data
-            }
-            if (typeof renderDynamicTable === 'function') {
-                renderDynamicTable(activeData);
-            }
-            
+            if (countEl) countEl.textContent = `${activeData.length} data`;
+
+            if (typeof setupFeatureFilters === 'function') setupFeatureFilters(null);
+            if (typeof renderDynamicTable === 'function') renderDynamicTable(activeData);
+
             toast(`Lapisan ${capitalize(table)} berhasil ditambahkan`, 'success');
-            
+
             renderOverlayActiveList();
+            clearCombobox('combo-overlay');
+            // refresh dropdown without the new overlay
             populateOverlayDropdown();
         } else {
             toast('Gagal memuat overlay: ' + json.message, 'error');
@@ -137,7 +166,7 @@ function removeOverlay(table) {
         overlayLayer.removeLayer(activeOverlays[table].layer);
         delete activeOverlays[table];
         toast(`Lapisan ${capitalize(table)} dihapus`, 'info');
-        
+
         const titleEl = document.getElementById('results-title');
         if (titleEl && titleEl.textContent.includes(capitalize(table))) {
             activeData = [];
@@ -145,7 +174,7 @@ function removeOverlay(table) {
             if (typeof setupFeatureFilters === 'function') setupFeatureFilters(null);
             if (typeof renderDynamicTable === 'function') renderDynamicTable([]);
         }
-        
+
         renderOverlayActiveList();
         populateOverlayDropdown();
     }
@@ -154,31 +183,24 @@ function removeOverlay(table) {
 function focusOverlay(table) {
     const overlay = activeOverlays[table];
     if (!overlay) return;
-    
+
     const tempGroup = L.featureGroup();
-    overlay.layer.eachLayer(l => {
-        tempGroup.addLayer(l);
-    });
-    
+    overlay.layer.eachLayer(l => tempGroup.addLayer(l));
+
     if (tempGroup.getLayers().length > 0) {
         map.fitBounds(tempGroup.getBounds(), { maxZoom: 16, animate: true });
     } else {
         toast('Lapisan tidak memiliki geometri', 'warn');
     }
-    
-    // Show table data in the bottom results panel
+
     activeData = overlay.data;
     activeColumns = overlay.columns;
     currentPage = 1;
     const titleEl = document.getElementById('results-title');
-    if (titleEl) {
-        titleEl.innerHTML = `<i class="fas fa-layer-group"></i> Lapisan ${capitalize(table)}`;
-    }
+    if (titleEl) titleEl.innerHTML = `<i class="fas fa-layer-group"></i> Lapisan ${capitalize(table)}`;
     const countEl = document.getElementById('result-count');
-    if (countEl) {
-        countEl.textContent = `${activeData.length} data`;
-    }
-    
+    if (countEl) countEl.textContent = `${activeData.length} data`;
+
     if (typeof setupFeatureFilters === 'function') setupFeatureFilters(null);
     if (typeof renderDynamicTable === 'function') renderDynamicTable(activeData);
 }
@@ -195,15 +217,18 @@ function toggleOverlayVisibility(table, isVisible) {
 
 function renderOverlayActiveList() {
     const listEl = document.getElementById('overlay-active-list');
+    const sectionEl = document.getElementById('overlay-active-section');
     if (!listEl) return;
+
     listEl.innerHTML = '';
-    
     const tables = Object.keys(activeOverlays);
-    if (tables.length === 0) {
-        listEl.innerHTML = `<li class="element-item" style="color:var(--text-muted); justify-content:center;">Belum ada lapisan overlay aktif</li>`;
-        return;
+
+    if (sectionEl) {
+        sectionEl.style.display = tables.length > 0 ? 'block' : 'none';
     }
-    
+
+    if (tables.length === 0) return;
+
     tables.forEach(table => {
         const item = activeOverlays[table];
         const isVisible = overlayLayer.hasLayer(item.layer);
@@ -229,4 +254,20 @@ function renderOverlayActiveList() {
         `;
         listEl.appendChild(li);
     });
+}
+
+// Called when overlay feature switch is toggled
+function setOverlayLayerVisible(isOn) {
+    overlayLayerVisible = isOn;
+    if (isOn) {
+        // Re-add all active overlay layers back to map
+        Object.values(activeOverlays).forEach(item => {
+            if (!overlayLayer.hasLayer(item.layer)) {
+                item.layer.addTo(overlayLayer);
+            }
+        });
+    } else {
+        // Remove all overlay layers from map
+        overlayLayer.clearLayers();
+    }
 }

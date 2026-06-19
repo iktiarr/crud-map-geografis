@@ -2,13 +2,14 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-// Connect to database 'teman'
-$conn_details = "host=localhost port=5432 dbname=teman user=postgres password=admin123";
+// Connect to database 'diki'
+$conn_details = "host=localhost port=5432 dbname=diki user=postgres password=admin123";
 $conn = pg_connect($conn_details);
 if (!$conn) {
-    $conn_details = "host=localhost port=5432 dbname=teman user=postgres password=ayib";
+    $conn_details = "host=localhost port=5432 dbname=diki user=postgres password=ayib";
     $conn = pg_connect($conn_details);
 }
+
 if (!$conn) {
     die("Koneksi PostgreSQL gagal");
 }

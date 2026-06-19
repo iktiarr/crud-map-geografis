@@ -72,20 +72,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     
     // Opsi 1: Kosongkan data contoh (Truncate)
     if ($action === 'clear_mock' || $action === 'reset_all') {
-        log_line("Membersihkan data contoh dari tabel kecamatan dan fasilitas_kesehatan...", 'info');
+        log_line("Membersihkan data contoh dari tabel kecamatan...", 'info');
         try {
-            // Cek apakah tabel kecamatan dan fasilitas_kesehatan ada
+            // Cek apakah tabel kecamatan ada
             $stmt = $pdo->query("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'kecamatan')");
             $kec_exists = $stmt->fetchColumn();
             
-            $stmt2 = $pdo->query("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'fasilitas_kesehatan')");
-            $fas_exists = $stmt2->fetchColumn();
-            
-            if ($kec_exists && $fas_exists) {
-                $pdo->exec("TRUNCATE TABLE fasilitas_kesehatan, kecamatan RESTART IDENTITY CASCADE;");
-                log_line("✅ Berhasil mengosongkan tabel 'kecamatan' dan 'fasilitas_kesehatan'.", 'ok');
+            if ($kec_exists) {
+                $pdo->exec("TRUNCATE TABLE kecamatan RESTART IDENTITY CASCADE;");
+                log_line("✅ Berhasil mengosongkan tabel 'kecamatan'.", 'ok');
             } else {
-                log_line("⚠️ Tabel bawaan tidak ditemukan, dilewati.", 'warn');
+                log_line("⚠️ Tabel kecamatan tidak ditemukan, dilewati.", 'warn');
             }
         } catch (PDOException $e) {
             log_line("❌ Gagal membersihkan data contoh: " . $e->getMessage(), 'error');
@@ -96,13 +93,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if ($action === 'drop_custom' || $action === 'reset_all') {
         log_line("\nMencari tabel hasil import untuk dihapus...", 'info');
         try {
-            // Ambil daftar semua tabel di schema public selain kecamatan, fasilitas_kesehatan, dan spatial_ref_sys
+            // Ambil daftar semua tabel di schema public selain kecamatan, spatial_ref_sys, dan tabel gambar kustom
             $tables = $pdo->query("
                 SELECT table_name 
                 FROM information_schema.tables 
                 WHERE table_schema = 'public' 
-                  AND table_type = 'BASE TABLE'
-                  AND table_name NOT IN ('kecamatan', 'fasilitas_kesehatan', 'spatial_ref_sys')
+                AND table_type = 'BASE TABLE'
+                AND table_name NOT IN (
+                    'kecamatan', 'spatial_ref_sys', 
+                    'custom_drawings', 'custom_markers', 'custom_polygons', 'custom_polylines'
+                )
                 ORDER BY table_name
             ")->fetchAll(PDO::FETCH_COLUMN);
             
@@ -129,8 +129,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 }
 
 // Helper untuk escape identifier di Postgres jika function pg_escape_identifier tidak tersedia
-function pg_escape_identifier($string) {
-    return '"' . str_replace('"', '""', $string) . '"';
+if (!function_exists('pg_escape_identifier')) {
+    function pg_escape_identifier($string) {
+        return '"' . str_replace('"', '""', $string) . '"';
+    }
 }
 
 if ($is_web) {

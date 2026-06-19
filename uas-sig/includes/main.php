@@ -11,16 +11,16 @@
         <!-- Loading overlay -->
         <div class="loading-overlay" id="map-loading">
             <div style="text-align:center;">
-                <div class="spinner"></div>
-                <p style="font-size:.8rem; color:var(--text-secondary); margin-top:.75rem;">Memuat data peta...</p>
+                <div class="spinner-ring"></div>
+                <p style="font-size:.8rem; color:var(--text-secondary); margin-top:.75rem; font-weight: 500;">Memuat...</p>
             </div>
         </div>
 
     </div>
 
-    <!-- RESULTS TABLE -->
+    <!-- RESULTS TABLE (Default: preview & overlay data) -->
     <div id="table-resizer" class="resizer-h"></div>
-    <div class="results-panel">
+    <div class="results-panel" id="results-panel-main">
         <div class="results-header">
             <h3 id="results-title"><i class="fas fa-table"></i> Daftar Data</h3>
             <span class="badge badge-count" id="result-count">0 data</span>
@@ -42,7 +42,9 @@
                     <tbody id="table-body">
                         <tr>
                             <td colspan="7" class="empty-state">
-                                <i class="fas fa-spinner fa-spin"></i> Memuat data...
+                                <i class="fas fa-map"></i>
+                                <h4>Pilih Fitur</h4>
+                                <p>Aktifkan fitur di sidebar untuk menampilkan data</p>
                             </td>
                         </tr>
                     </tbody>
@@ -53,11 +55,11 @@
         </div>
     </div>
 
-    <!-- 7 VISUAL MAPS HASIL ANALISIS -->
-    <div id="analysis-visual-section" class="sub-maps-section" style="display: none; padding: 1.25rem 0;">
-        <h3 class="sub-maps-section-title">
-            <i class="fas fa-th-large"></i> Hasil Visualisasi Spasial Himpunan
-        </h3>
+    <!-- 7 VISUAL MAPS HASIL ANALISIS (Canvas Feature) -->
+    <div id="analysis-visual-section" class="sub-maps-section" style="display: none;">
+        <div class="sub-maps-section-title">
+            <i class="fas fa-object-group"></i> Hasil Visualisasi Himpunan Spasial
+        </div>
         
         <div class="sub-maps-grid">
             <!-- Map 1: Wilayah A (Asli) -->
@@ -129,7 +131,7 @@
             <!-- Map 7: Intersection (Irisan) -->
             <div class="sub-map-card">
                 <h4>
-                    <span>7. Irisan A dan B (Gray Style)</span>
+                    <span>7. Irisan A dan B</span>
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
                         <span id="badge-intersect" class="badge">0 Titik</span>
                     </div>
@@ -138,6 +140,7 @@
             </div>
         </div>
     </div>
+
 </main>
 </div> <!-- /.app-layout -->
 

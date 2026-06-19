@@ -10,7 +10,7 @@ try {
         SELECT f_table_name AS table_name, type
         FROM geometry_columns
         WHERE f_table_schema = 'public'
-          AND f_table_name NOT IN ('spatial_ref_sys')
+          AND f_table_name NOT IN ('spatial_ref_sys', 'import_metadata')
         ORDER BY f_table_name
     ")->fetchAll(PDO::FETCH_ASSOC);
     
@@ -21,7 +21,7 @@ try {
             FROM information_schema.tables
             WHERE table_schema = 'public'
               AND table_type = 'BASE TABLE'
-              AND table_name NOT IN ('spatial_ref_sys')
+              AND table_name NOT IN ('spatial_ref_sys', 'import_metadata')
             ORDER BY table_name
         ")->fetchAll(PDO::FETCH_COLUMN);
         
@@ -67,6 +67,34 @@ try {
         )
     ");
 
+    // Fetch all metadata once (Batch Query 1)
+    $metaMap = [];
+    try {
+        $metaMap = $pdo->query("SELECT table_name, files FROM import_metadata")->fetchAll(PDO::FETCH_KEY_PAIR);
+    } catch (Exception $e) {
+        // Safe to ignore
+    }
+
+    // Fetch all columns for all user tables in public schema once (Batch Query 2)
+    $tableAllColumns = [];
+    try {
+        $allColsStmt = $pdo->query("
+            SELECT c.relname AS table_name, a.attname AS column_name
+            FROM pg_attribute a
+            JOIN pg_class c ON a.attrelid = c.oid
+            JOIN pg_namespace n ON c.relnamespace = n.oid
+            WHERE n.nspname = 'public'
+              AND c.relkind = 'r'
+              AND a.attnum > 0
+              AND NOT a.attisdropped
+        ");
+        foreach ($allColsStmt->fetchAll(PDO::FETCH_ASSOC) as $colRow) {
+            $tableAllColumns[$colRow['table_name']][] = $colRow['column_name'];
+        }
+    } catch (Exception $e) {
+        // Safe to ignore
+    }
+
     $resultTables = [];
     $candidateCols = ['jenis', 'klasifikasi', 'tipe', 'kategori', 'status', 'type', 'class', 'category', 'classification'];
     
@@ -89,7 +117,7 @@ try {
         
         if ($hasJenis && $categoryColumn) {
             try {
-                // Ambil distinct jenis dari tabel tersebut
+                // Ambil distinct jenis dari tabel tersebut (tetap per-tabel karena datanya dinamis dan minor)
                 $stmt = $pdo->query("
                     SELECT DISTINCT \"{$categoryColumn}\" 
                     FROM \"{$tableName}\" 
@@ -104,12 +132,10 @@ try {
         
         // Jika tidak memiliki jenis/kategori dinamis, kita tampilkan komponen file terunggah (.shp, .dbf, .prj, .shx)
         if (empty($jenisList)) {
-            // Cek di import_metadata
-            $metaStmt = $pdo->prepare("SELECT files FROM import_metadata WHERE table_name = ?");
-            $metaStmt->execute([$tableName]);
-            $metaFiles = $metaStmt->fetchColumn();
+            // Cek di hasil batch import_metadata (Tanpa Query)
+            $metaFiles = $metaMap[$tableName] ?? null;
             
-            if ($metaFiles !== false) {
+            if ($metaFiles !== null) {
                 if (!empty($metaFiles)) {
                     $parts = explode(',', $metaFiles);
                     foreach ($parts as $p) {
@@ -119,45 +145,34 @@ try {
                     $categoryColumn = '__component__';
                 }
             } else {
-                // Deteksi dinamis columns
-                try {
-                    $colCheck = $pdo->prepare("
-                        SELECT column_name 
-                        FROM information_schema.columns 
-                        WHERE table_schema = 'public' 
-                          AND table_name = ?
-                    ");
-                    $colCheck->execute([$tableName]);
-                    $allTableCols = $colCheck->fetchAll(PDO::FETCH_COLUMN);
-                    
-                    $hasGeom = in_array('geom', $allTableCols) || in_array('geometry', $allTableCols);
-                    $hasAttrs = false;
-                    foreach ($allTableCols as $c) {
-                        if (!in_array($c, ['id', 'geom', 'geometry', 'created_at', 'updated_at'])) {
-                            $hasAttrs = true;
-                            break;
-                        }
+                // Deteksi dinamis columns dari hasil batch pg_attribute (Tanpa Query)
+                $allTableCols = $tableAllColumns[$tableName] ?? [];
+                
+                $hasGeom = in_array('geom', $allTableCols) || in_array('geometry', $allTableCols);
+                $hasAttrs = false;
+                foreach ($allTableCols as $c) {
+                    if (!in_array($c, ['id', 'geom', 'geometry', 'created_at', 'updated_at'])) {
+                        $hasAttrs = true;
+                        break;
                     }
-                    
-                    $detected = [];
-                    if ($hasGeom) {
-                        $detected[] = '.shp';
-                    }
-                    if ($hasAttrs) {
-                        $detected[] = '.dbf';
-                    }
-                    if ($hasGeom) {
-                        $detected[] = '.prj';
-                        $detected[] = '.shx';
-                    }
-                    
-                    if (!empty($detected)) {
-                        $jenisList = $detected;
-                        $hasJenis = true;
-                        $categoryColumn = '__component__';
-                    }
-                } catch (Exception $colErr) {
-                    // Abaikan error deteksi kolom
+                }
+                
+                $detected = [];
+                if ($hasGeom) {
+                    $detected[] = '.shp';
+                }
+                if ($hasAttrs) {
+                    $detected[] = '.dbf';
+                }
+                if ($hasGeom) {
+                    $detected[] = '.prj';
+                    $detected[] = '.shx';
+                }
+                
+                if (!empty($detected)) {
+                    $jenisList = $detected;
+                    $hasJenis = true;
+                    $categoryColumn = '__component__';
                 }
             }
         }

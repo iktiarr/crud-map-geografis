@@ -50,6 +50,105 @@ function switchTab(id, btn) {
 }
 
 /* =====================================================
+   COMBOBOX ENGINE
+   ===================================================== */
+function toggleCombobox(wrapId) {
+    const wrap = document.getElementById(wrapId);
+    if (!wrap) return;
+
+    document.querySelectorAll('.combobox-wrap.open').forEach(el => {
+        if (el.id !== wrapId) el.classList.remove('open');
+    });
+
+    const isOpen = wrap.classList.contains('open');
+    wrap.classList.toggle('open');
+
+    if (!isOpen) {
+        const dropdown = wrap.querySelector('.combobox-dropdown');
+        const inputWrap = wrap.querySelector('.combobox-input-wrap');
+        if (dropdown && inputWrap) {
+            const rect = inputWrap.getBoundingClientRect();
+            dropdown.style.position = 'fixed';
+            dropdown.style.top = (rect.bottom + 2) + 'px';
+            dropdown.style.left = rect.left + 'px';
+            dropdown.style.width = rect.width + 'px';
+            dropdown.style.zIndex = '99999';
+            dropdown.style.maxHeight = '200px';
+            dropdown.style.overflowY = 'auto';
+        }
+    }
+}
+
+function closeAllComboboxes() {
+    document.querySelectorAll('.combobox-wrap.open').forEach(el => el.classList.remove('open'));
+}
+
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.combobox-wrap')) {
+        closeAllComboboxes();
+    }
+});
+
+function setComboboxValue(wrapId, value, label) {
+    const wrap = document.getElementById(wrapId);
+    if (!wrap) return;
+
+    const hiddenInput = wrap.querySelector('input[type="hidden"]');
+    const textInput = wrap.querySelector('.combobox-input');
+
+    if (hiddenInput) hiddenInput.value = value;
+    if (textInput) {
+        textInput.value = label || '';
+        textInput.title = label || '';
+    }
+
+    wrap.querySelectorAll('.combobox-option').forEach(opt => {
+        opt.classList.toggle('selected', opt.dataset.value === String(value));
+    });
+    wrap.classList.remove('open');
+}
+
+function clearCombobox(wrapId) {
+    setComboboxValue(wrapId, '', '');
+    const wrap = document.getElementById(wrapId);
+    if (wrap) {
+        wrap.querySelectorAll('.combobox-option').forEach(o => o.classList.remove('selected'));
+    }
+}
+
+function populateCombobox(wrapId, options, onSelect) {
+    const wrap = document.getElementById(wrapId);
+    if (!wrap) return;
+
+    const dropdown = wrap.querySelector('.combobox-dropdown');
+    const emptyEl  = wrap.querySelector('[id$="-empty"]');
+
+    if (!dropdown) return;
+
+    dropdown.querySelectorAll('.combobox-option').forEach(o => o.remove());
+
+    if (!options || options.length === 0) {
+        if (emptyEl) emptyEl.style.display = 'block';
+        return;
+    }
+
+    if (emptyEl) emptyEl.style.display = 'none';
+
+    options.forEach(opt => {
+        const div = document.createElement('div');
+        div.className = 'combobox-option';
+        div.dataset.value = opt.value;
+        div.textContent = opt.label;
+        div.onclick = (e) => {
+            e.stopPropagation();
+            setComboboxValue(wrapId, opt.value, opt.label);
+            if (typeof onSelect === 'function') onSelect(opt.value, opt.label);
+        };
+        dropdown.appendChild(div);
+    });
+}
+
+/* =====================================================
    STATE & CONSTANTS
    ===================================================== */
 let allData       = [];
@@ -109,24 +208,25 @@ function suggestNextTableName(tables) {
 
         if (kecJson.status === 'success') {
             kecamatanList = kecJson.data;
-            const selKec  = document.getElementById('filter-kec');
             const fKec    = document.getElementById('f-kecamatan');
             
-            if (selKec) {
-                selKec.innerHTML = '<option value="">Semua Kecamatan</option>';
-            }
             if (fKec) {
                 fKec.innerHTML   = '<option value="">-- Pilih Kecamatan --</option>';
+                kecamatanList.forEach(k => {
+                    fKec.insertAdjacentHTML('beforeend', `<option value="${k.id}">${k.nama_kecamatan}</option>`);
+                });
             }
             
-            kecamatanList.forEach(k => {
-                if (selKec) {
-                    selKec.insertAdjacentHTML('beforeend', `<option value="${k.id}">${k.nama_kecamatan}</option>`);
-                }
-                if (fKec) {
-                    fKec.insertAdjacentHTML('beforeend', `<option value="${k.id}">${k.nama_kecamatan}</option>`);
-                }
+            // Populate combo-filter-kec
+            const kecOpts = [
+                { value: '', label: 'Semua Kecamatan' },
+                ...kecamatanList.map(k => ({ value: k.id, label: k.nama_kecamatan }))
+            ];
+            populateCombobox('combo-filter-kec', kecOpts, (val) => {
+                currentPage = 1;
+                filterTable();
             });
+            setComboboxValue('combo-filter-kec', '', 'Semua Kecamatan');
         }
     } catch(e) {
         console.error('Error load kecamatan:', e);
@@ -140,9 +240,8 @@ function suggestNextTableName(tables) {
    POPULATE ACTIVE TABLE DROPDOWN
    ===================================================== */
 async function populateActiveTableDropdown() {
-    const sel = document.getElementById('active-table');
-    if (!sel) return;
-    sel.innerHTML = '';
+    const hiddenInput = document.getElementById('active-table');
+    if (!hiddenInput) return;
     
     try {
         const res  = await fetch('../api/get_tables.php');
@@ -154,10 +253,19 @@ async function populateActiveTableDropdown() {
             const tableNames = tables.map(t => t.table_name);
             const defaultTable = tableNames.includes('fasilitas_kesehatan') ? 'fasilitas_kesehatan' : tableNames[0];
             
-            tables.forEach(t => {
-                const isSelected = t.table_name === defaultTable ? 'selected' : '';
-                sel.insertAdjacentHTML('beforeend', `<option value="${t.table_name}" ${isSelected}>${capitalize(t.table_name)} (${t.type})</option>`);
+            const tableOpts = tables.map(t => ({
+                value: t.table_name,
+                label: `${capitalize(t.table_name)} (${t.type})`
+            }));
+            
+            populateCombobox('combo-active-table', tableOpts, (val) => {
+                onTableChange();
             });
+            
+            // Set default value
+            const defaultTableObj = tables.find(t => t.table_name === defaultTable);
+            const defaultLabel = defaultTableObj ? `${capitalize(defaultTableObj.table_name)} (${defaultTableObj.type})` : '';
+            setComboboxValue('combo-active-table', defaultTable, defaultLabel);
             
             onTableChange();
         } else {
@@ -205,32 +313,38 @@ async function loadTableData(table, selectJenis = null, selectJenisColumn = null
             const hasJenis = !!activeJenisColumn;
             const hasKecamatan = activeColumns.includes('kecamatan_id');
             
-            // Populate #filter-jenis secara dinamis jika memiliki kolom kategori
-            const filterJenis = document.getElementById('filter-jenis');
-            if (filterJenis) {
+            // Populate combo-filter-jenis secara dinamis jika memiliki kolom kategori
+            const comboJenisWrap = document.getElementById('combo-filter-jenis');
+            if (comboJenisWrap) {
                 if (hasJenis) {
-                    filterJenis.style.display = 'block';
+                    comboJenisWrap.style.display = 'block';
                     const distinctJenis = [...new Set(allData.map(d => d[activeJenisColumn]).filter(Boolean))];
-                    filterJenis.innerHTML = '<option value="">Semua Jenis</option>';
-                    distinctJenis.forEach(j => {
-                        filterJenis.insertAdjacentHTML('beforeend', `<option value="${j}">${j}</option>`);
+                    const jenisOpts = [
+                        { value: '', label: 'Semua Jenis' },
+                        ...distinctJenis.map(j => ({ value: j, label: j }))
+                    ];
+                    
+                    populateCombobox('combo-filter-jenis', jenisOpts, (val) => {
+                        currentPage = 1;
+                        filterTable();
                     });
-                    if (selectJenis) {
-                        filterJenis.value = selectJenis;
-                    }
+                    
+                    const defaultVal = selectJenis || '';
+                    setComboboxValue('combo-filter-jenis', defaultVal, defaultVal ? defaultVal : 'Semua Jenis');
                 } else {
-                    filterJenis.style.display = 'none';
-                    filterJenis.innerHTML = '<option value="">Semua Jenis</option>';
+                    comboJenisWrap.style.display = 'none';
+                    setComboboxValue('combo-filter-jenis', '', 'Semua Jenis');
                 }
             }
             
             // Tampilkan/sembunyikan filter kecamatan
-            const filterKec = document.getElementById('filter-kec');
-            if (filterKec) {
+            const comboKecWrap = document.getElementById('combo-filter-kec');
+            if (comboKecWrap) {
                 if (hasKecamatan) {
-                    filterKec.style.display = 'block';
+                    comboKecWrap.style.display = 'block';
                 } else {
-                    filterKec.style.display = 'none';
+                    comboKecWrap.style.display = 'none';
+                    setComboboxValue('combo-filter-kec', '', 'Semua Kecamatan');
                 }
             }
             
@@ -592,9 +706,9 @@ function viewTableData(tableName, jenisName = null, jenisColumn = null) {
         switchTab('tab-data', tabDataBtn);
     }
     
-    const selectEl = document.getElementById('active-table');
-    if (selectEl) {
-        selectEl.value = tableName;
+    const hiddenEl = document.getElementById('active-table');
+    if (hiddenEl) {
+        setComboboxValue('combo-active-table', tableName, capitalize(tableName));
         loadTableData(tableName, jenisName, jenisColumn);
     }
 }
@@ -802,9 +916,9 @@ async function uploadShapefile() {
             await loadTablesList();
             
             const cleanTargetName = targetTable.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-            const selectEl = document.getElementById('active-table');
-            if (selectEl && Array.from(selectEl.options).some(o => o.value === cleanTargetName)) {
-                selectEl.value = cleanTargetName;
+            const hiddenEl = document.getElementById('active-table');
+            if (hiddenEl) {
+                setComboboxValue('combo-active-table', cleanTargetName, capitalize(cleanTargetName));
                 onTableChange();
             }
         } else {
@@ -817,3 +931,192 @@ async function uploadShapefile() {
         btn.innerHTML = originalBtnHTML;
     }
 }
+
+/* =====================================================
+   FITUR TAMBAH FASILITAS MANUAL
+   ===================================================== */
+let adminMap = null;
+let adminMarkers = [];
+
+function openManualFacilityModal() {
+    const dialog = document.getElementById('manual-facility-dialog');
+    if (!dialog) return;
+
+    dialog.classList.add('show');
+    document.getElementById('manual-facility-name').value = '';
+    
+    // Clear old markers from map
+    if (adminMap) {
+        adminMarkers.forEach(m => adminMap.removeLayer(m));
+    }
+    adminMarkers = [];
+    updateCoordsList();
+
+    // Initialize map if not done yet
+    if (!adminMap) {
+        adminMap = L.map('admin-map').setView([-6.9175, 107.6191], 13);
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(adminMap);
+
+        // Click handler to add marker
+        adminMap.on('click', function(e) {
+            addAdminMarker(e.latlng);
+        });
+        
+        // Fit map bounds to existing kecamatan if available
+        fetchKecamatanAndFitBounds();
+    } else {
+        // Just invalidate size so Leaflet layout updates correctly inside the modal
+        setTimeout(() => {
+            adminMap.invalidateSize();
+            fetchKecamatanAndFitBounds();
+        }, 100);
+    }
+}
+
+async function fetchKecamatanAndFitBounds() {
+    try {
+        const res = await fetch('../api/get_layer_data.php?table=kecamatan');
+        const json = await res.json();
+        if (json.status === 'success' && json.data.length > 0) {
+            const tempGroup = L.featureGroup();
+            json.data.forEach(row => {
+                if (row.geometry) {
+                    tempGroup.addLayer(L.geoJSON(row.geometry));
+                }
+            });
+            if (tempGroup.getLayers().length > 0) {
+                adminMap.fitBounds(tempGroup.getBounds());
+            }
+        }
+    } catch (e) {
+        console.error("Gagal menyesuaikan batas peta ke kecamatan:", e);
+    }
+}
+
+function addAdminMarker(latlng) {
+    const marker = L.marker(latlng, {
+        draggable: true
+    }).addTo(adminMap);
+    
+    // When dragged, update coordinates list
+    marker.on('dragend', function() {
+        updateCoordsList();
+    });
+
+    // When clicked, remove this marker
+    marker.on('click', function(e) {
+        L.DomEvent.stopPropagation(e);
+        adminMap.removeLayer(marker);
+        adminMarkers = adminMarkers.filter(m => m !== marker);
+        updateCoordsList();
+    });
+
+    adminMarkers.push(marker);
+    updateCoordsList();
+}
+
+function updateCoordsList() {
+    const listContainer = document.getElementById('manual-coords-list-container');
+    const listEl = document.getElementById('manual-coords-list');
+    if (!listEl) return;
+
+    if (adminMarkers.length === 0) {
+        if (listContainer) listContainer.style.display = 'none';
+        listEl.innerHTML = 'Belum ada titik yang dipilih.';
+        return;
+    }
+
+    if (listContainer) listContainer.style.display = 'block';
+    
+    listEl.innerHTML = adminMarkers.map((m, idx) => {
+        const pos = m.getLatLng();
+        return `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.25rem;">
+            <span>Titik ${idx+1}: <strong>${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)}</strong></span>
+            <button type="button" class="btn btn-link btn-sm" onclick="removeAdminMarkerByIdx(${idx})" style="color:var(--danger); padding:0; font-size:0.75rem; border:none; background:none; cursor:pointer;"><i class="fas fa-trash"></i></button>
+        </div>`;
+    }).join('');
+}
+
+function removeAdminMarkerByIdx(idx) {
+    const marker = adminMarkers[idx];
+    if (marker && adminMap) {
+        adminMap.removeLayer(marker);
+        adminMarkers.splice(idx, 1);
+        updateCoordsList();
+    }
+}
+
+function closeManualFacilityDialog() {
+    const dialog = document.getElementById('manual-facility-dialog');
+    if (dialog) dialog.classList.remove('show');
+}
+
+function closeManualFacilityDialogOnBackdrop(e) {
+    if (e.target.id === 'manual-facility-dialog') {
+        closeManualFacilityDialog();
+    }
+}
+
+async function saveManualFacility() {
+    const nameEl = document.getElementById('manual-facility-name');
+    const name = nameEl ? nameEl.value.trim() : '';
+
+    if (!name) {
+        toast('Nama fasilitas tidak boleh kosong!', 'warn');
+        return;
+    }
+
+    if (adminMarkers.length === 0) {
+        toast('Pilih minimal 1 marker pada peta!', 'warn');
+        return;
+    }
+
+    // WKT MultiPoint format: MULTIPOINT(lng1 lat1, lng2 lat2, ...)
+    const pointsStr = adminMarkers.map(m => {
+        const pos = m.getLatLng();
+        return `${pos.lng} ${pos.lat}`;
+    }).join(', ');
+    const wkt = `MULTIPOINT(${pointsStr})`;
+
+    const saveBtn = document.getElementById('save-manual-btn');
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
+    }
+
+    try {
+        const res = await fetch('../api/save_manual_facility.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nama: name, wkt: wkt })
+        });
+        const json = await res.json();
+
+        if (json.status === 'success') {
+            toast(json.message, 'success');
+            closeManualFacilityDialog();
+            
+            // Reload the table and active table dropdown
+            const activeTableEl = document.getElementById('active-table');
+            if (activeTableEl && json.table) {
+                setComboboxValue('combo-active-table', json.table, capitalize(json.table) + ' (GEOMETRY)');
+                await loadTableData(json.table);
+            }
+            await populateActiveTableDropdown();
+            await loadTablesList();
+        } else {
+            toast('Gagal menyimpan: ' + json.message, 'error');
+        }
+    } catch (e) {
+        toast('Error: ' + e.message, 'error');
+    } finally {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = 'Simpan';
+        }
+    }
+}
+

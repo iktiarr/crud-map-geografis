@@ -24,36 +24,69 @@ function closeTutorialDialogOnBackdrop(event) {
 }
 
 // =====================================================
-// TOGGLE ACCORDION SECTIONS FROM SWITCHES
+// TOGGLE FEATURE VISIBILITY (per-feature switch)
 // =====================================================
-function toggleFeatureSection(accordionId, isChecked) {
-    let itemId = '';
-    if (accordionId === 'acc-overlays') itemId = 'accordion-item-overlays';
-    else if (accordionId === 'acc-preview') itemId = 'accordion-item-preview';
-    else if (accordionId === 'acc-spatial') itemId = 'accordion-item-spatial';
-    else if (accordionId === 'acc-draw') itemId = 'accordion-item-draw';
-    
-    const item = document.getElementById(itemId);
-    if (!item) return;
-    
-    if (isChecked) {
-        item.style.display = 'block';
-    } else {
-        item.style.display = 'none';
-        
-        // Also if it is active/open, let's close it so it is not active
-        const content = document.getElementById(accordionId);
-        const trigger = item.querySelector('.accordion-trigger');
-        if (content && content.classList.contains('show')) {
-            content.classList.remove('show');
-            if (trigger) trigger.classList.remove('active');
-            
-            // If it was spatial, trigger layout update
-            if (accordionId === 'acc-spatial') {
-                updateWorkspaceView();
-            }
+function toggleFeatureVisibility(feature, isOn) {
+    // Map feature names to accordion item IDs
+    const itemMap = {
+        'overlays': 'accordion-item-overlays',
+        'preview':  'accordion-item-preview',
+        'canvas':   'accordion-item-canvas'
+    };
+    const itemId = itemMap[feature];
+    const item = itemId ? document.getElementById(itemId) : null;
+
+    if (item) {
+        item.style.display = isOn ? 'block' : 'none';
+        // Close accordion content when switching off
+        if (!isOn) {
+            const allContent = item.querySelectorAll('.accordion-content');
+            const allTriggers = item.querySelectorAll('.accordion-trigger');
+            allContent.forEach(c => c.classList.remove('show'));
+            allTriggers.forEach(b => b.classList.remove('active'));
         }
     }
+
+    // Control map layers
+    if (feature === 'overlays') {
+        if (typeof setOverlayLayerVisible === 'function') setOverlayLayerVisible(isOn);
+    } else if (feature === 'preview') {
+        if (isOn) {
+            // Don't auto-show; user must select table
+        } else {
+            markerLayer.clearLayers();
+            highlightLayer.clearLayers();
+            // Clear table data if preview was active
+            activeData = [];
+            activeColumns = [];
+            if (typeof setupFeatureFilters === 'function') setupFeatureFilters(null);
+            if (typeof renderDynamicTable === 'function') renderDynamicTable([]);
+        }
+    } else if (feature === 'canvas') {
+        window.canvasLayerVisible = isOn;
+        if (isOn) {
+            // Re-draw saved drawings on map
+            if (typeof loadDrawings === 'function') loadDrawings();
+            // Show analysis points on map
+            const ptsTable = document.getElementById('spatial-points-table') ? document.getElementById('spatial-points-table').value : 'custom_drawings';
+            if (typeof displayAnalysisPointsOnMainMap === 'function') displayAnalysisPointsOnMainMap(ptsTable);
+        } else {
+            drawingsLayer.clearLayers();
+            if (typeof analysisPointsLayer !== 'undefined') analysisPointsLayer.clearLayers();
+            if (typeof analysisLayer !== 'undefined') analysisLayer.clearLayers();
+            // Hide analysis section
+            const analysisSection = document.getElementById('analysis-visual-section');
+            if (analysisSection) analysisSection.style.display = 'none';
+        }
+    }
+
+
+    updateWorkspaceView();
+}
+
+// Legacy compat
+function toggleFeatureSection(accordionId, isChecked) {
+    toggleFeatureVisibility(accordionId.replace('acc-', ''), isChecked);
 }
 
 // =====================================================
@@ -98,52 +131,70 @@ function toggleAccordion(id, btn) {
 }
 
 function updateWorkspaceView() {
-    const spatialActive = document.getElementById('acc-spatial') && document.getElementById('acc-spatial').classList.contains('show');
+    const canvasActive = document.getElementById('acc-canvas') && document.getElementById('acc-canvas').classList.contains('show');
     const mainContent = document.querySelector('.main-content');
     const tableResizer = document.getElementById('table-resizer');
     const resultsPanel = document.querySelector('.results-panel');
     const analysisSection = document.getElementById('analysis-visual-section');
     const mapWrapper = document.querySelector('.map-wrapper');
-    
-    if (spatialActive) {
+
+    if (canvasActive) {
+        if (resultsPanel && resultsPanel.id === 'results-panel-main') resultsPanel.style.display = 'none';
         if (tableResizer) tableResizer.style.display = 'none';
-        if (resultsPanel) resultsPanel.style.display = 'none';
-        if (analysisSection) analysisSection.style.display = 'block';
-        if (mainContent) mainContent.style.overflowY = 'auto';
-        if (mapWrapper) {
-            mapWrapper.style.height = '450px';
-            mapWrapper.style.flex = 'none';
+        
+        // Show sub-maps if analysis has been run
+        const isAnalysisVisible = analysisSection && analysisSection.style.display !== 'none';
+        if (isAnalysisVisible) {
+            if (mainContent) mainContent.style.overflowY = 'auto';
+            if (mapWrapper) {
+                mapWrapper.style.height = '400px';
+                mapWrapper.style.flex = 'none';
+            }
+            if (analysisSection) {
+                analysisSection.style.height = 'auto';
+                analysisSection.style.flex = 'none';
+                analysisSection.style.overflowY = 'visible';
+            }
+        } else {
+            if (mainContent) mainContent.style.overflowY = 'hidden';
+            if (mapWrapper) {
+                mapWrapper.style.height = '100%';
+                mapWrapper.style.flex = '1';
+            }
+            if (analysisSection) {
+                analysisSection.style.height = '';
+                analysisSection.style.overflowY = '';
+            }
         }
-        
-        // Invalidate size multiple times to handle transition animations
+
         const invalidateAll = () => {
-            if (window.map) window.map.invalidateSize();
+            if (typeof map !== 'undefined' && map) map.invalidateSize();
             for (const key in subMaps) {
-                if (subMaps[key]) {
-                    subMaps[key].invalidateSize();
-                }
+                if (subMaps[key]) subMaps[key].invalidateSize();
             }
-            if (typeof syncSubMapsView === 'function') {
-                syncSubMapsView();
-            }
+            if (typeof syncSubMapsView === 'function') syncSubMapsView();
         };
-        
+
         invalidateAll();
         setTimeout(invalidateAll, 100);
         setTimeout(invalidateAll, 300);
         setTimeout(invalidateAll, 500);
     } else {
         if (tableResizer) tableResizer.style.display = 'flex';
-        if (resultsPanel) resultsPanel.style.display = 'flex';
-        if (analysisSection) analysisSection.style.display = 'none';
+        if (resultsPanel && resultsPanel.id === 'results-panel-main') resultsPanel.style.display = 'flex';
+        if (analysisSection) {
+            analysisSection.style.display = 'none';
+            analysisSection.style.height = ''; // Reset height
+            analysisSection.style.overflowY = '';
+        }
         if (mainContent) mainContent.style.overflowY = 'hidden';
         if (mapWrapper) {
             mapWrapper.style.height = '';
             mapWrapper.style.flex = '';
         }
-        
+
         setTimeout(() => {
-            if (window.map) window.map.invalidateSize();
+            if (typeof map !== 'undefined' && map) map.invalidateSize();
         }, 100);
     }
 }
@@ -273,8 +324,8 @@ function initResizableLayout() {
             if (newWidth < 240) newWidth = 240;
             if (newWidth > 480) newWidth = 480;
             sidebar.style.width = newWidth + 'px';
-            if (window.map) {
-                window.map.invalidateSize({ animate: false });
+            if (typeof map !== 'undefined' && map) {
+                map.invalidateSize({ animate: false });
             }
         } else if (isResizingTable) {
             const mainRect = mainContent.getBoundingClientRect();
@@ -287,9 +338,17 @@ function initResizableLayout() {
             if (newHeight < minHeight) newHeight = minHeight;
             if (newHeight > maxHeight) newHeight = maxHeight;
 
-            resultsPanel.style.height = newHeight + 'px';
-            if (window.map) {
-                window.map.invalidateSize({ animate: false });
+            if (resultsPanel && resultsPanel.style.display !== 'none') {
+                resultsPanel.style.height = newHeight + 'px';
+            } else if (analysisSection && analysisSection.style.display !== 'none') {
+                analysisSection.style.height = newHeight + 'px';
+                for (const key in subMaps) {
+                    if (subMaps[key]) subMaps[key].invalidateSize({ animate: false });
+                }
+            }
+
+            if (typeof map !== 'undefined' && map) {
+                map.invalidateSize({ animate: false });
             }
         }
     });
@@ -306,8 +365,11 @@ function initResizableLayout() {
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
         
-        if (window.map) {
-            window.map.invalidateSize();
+        if (typeof map !== 'undefined' && map) {
+            map.invalidateSize();
+        }
+        for (const key in subMaps) {
+            if (subMaps[key]) subMaps[key].invalidateSize();
         }
     });
 
@@ -338,10 +400,18 @@ function initResizableLayout() {
             const minHeight = 120;
             if (newHeight < minHeight) newHeight = minHeight;
             if (newHeight > maxHeight) newHeight = maxHeight;
-            resultsPanel.style.height = newHeight + 'px';
+            
+            if (resultsPanel && resultsPanel.style.display !== 'none') {
+                resultsPanel.style.height = newHeight + 'px';
+            } else if (analysisSection && analysisSection.style.display !== 'none') {
+                analysisSection.style.height = newHeight + 'px';
+                for (const key in subMaps) {
+                    if (subMaps[key]) subMaps[key].invalidateSize({ animate: false });
+                }
+            }
         }
-        if (window.map) {
-            window.map.invalidateSize({ animate: false });
+        if (typeof map !== 'undefined' && map) {
+            map.invalidateSize({ animate: false });
         }
     }, { passive: true });
 
@@ -350,8 +420,11 @@ function initResizableLayout() {
         isResizingTable = false;
         sidebarResizer.classList.remove('dragging');
         tableResizer.classList.remove('dragging');
-        if (window.map) {
-            window.map.invalidateSize();
+        if (typeof map !== 'undefined' && map) {
+            map.invalidateSize();
+        }
+        for (const key in subMaps) {
+            if (subMaps[key]) subMaps[key].invalidateSize();
         }
     });
 }
@@ -364,42 +437,49 @@ initResizableLayout();
 // =====================================================
 window.addEventListener('DOMContentLoaded', async () => {
     try {
-        // Bind map events for sync
+        // Bind map events for sync (Disabled to allow independent panning and zooming of sub-maps)
+        /*
         if (typeof syncSubMapsView === 'function') {
             map.on('move', syncSubMapsView);
             map.on('zoomend', syncSubMapsView);
         }
+        */
 
-        // Initialize sub-maps
-        if (typeof initSubMaps === 'function') {
-            initSubMaps();
-        }
+        // Ambil daftar tabel
+        const tablesData = await fetch('api/get_tables.php').then(r => r.json());
 
-        // Ambil daftar tabel, elemen kustom, dan gambar kustom secara paralel
-        const [tablesData] = await Promise.all([
-            fetch('api/get_tables.php').then(r => r.json()),
-            typeof loadCustomGeometries === 'function' ? loadCustomGeometries() : Promise.resolve(),
-            typeof loadDrawings === 'function' ? loadDrawings() : Promise.resolve()
-        ]);
-        
         if (tablesData.status === 'success' && tablesData.tables.length) {
-            tablesList = tablesData.tables; 
-            
+            tablesList = tablesData.tables;
+
             if (typeof populateOverlayDropdown === 'function') populateOverlayDropdown();
             if (typeof populatePreviewDropdown === 'function') populatePreviewDropdown();
-            if (typeof populateSpatialAnalysisDropdowns === 'function') populateSpatialAnalysisDropdowns();
-            
-            const defaultTable = tablesList.some(t => t.table_name === 'fasilitas_kesehatan') ? 'fasilitas_kesehatan' : tablesList[0].table_name;
-            const previewSelect = document.getElementById('preview-table-select');
-            if (previewSelect) {
-                previewSelect.value = defaultTable;
-            }
-            if (typeof previewTable === 'function') {
-                await previewTable();
-            }
         }
+
+        // Load drawings (for canvas spatial analysis dropdowns)
+        if (typeof loadDrawings === 'function') {
+            await loadDrawings();
+        }
+
+        // Populate spatial dropdowns after drawings loaded
+        if (typeof populateSpatialAnalysisDropdowns === 'function') {
+            populateSpatialAnalysisDropdowns();
+        }
+
+        // All features start hidden (switches are OFF)
+        // User must toggle switch to activate
+        const emptyMsg = `
+            <tr>
+                <td colspan="100" class="empty-state">
+                    <i class="fas fa-map"></i>
+                    <h4>Peta Siap</h4>
+                    <p>Aktifkan fitur di sidebar untuk menampilkan data di peta</p>
+                </td>
+            </tr>`;
+        const tbody = document.getElementById('table-body');
+        if (tbody) tbody.innerHTML = emptyMsg;
+
     } catch (e) {
         console.error('Error in init:', e);
-        toast('Gagal menginisialisasi control panel', 'error');
+        toast('Gagal menginisialisasi halaman', 'error');
     }
 });

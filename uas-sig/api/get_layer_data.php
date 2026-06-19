@@ -14,6 +14,10 @@ if (empty($table)) {
     echo json_encode(['status' => 'error', 'message' => 'Nama tabel tidak valid']); exit;
 }
 
+if (in_array(strtolower($table), ['import_metadata', 'spatial_ref_sys'])) {
+    echo json_encode(['status' => 'error', 'message' => 'Tabel metadata/sistem tidak boleh diakses langsung']); exit;
+}
+
 try {
     // Ambil semua kolom tabel dari system catalogs dalam 1 query saja (jauh lebih cepat daripada information_schema views)
     $colStmt = $pdo->prepare("

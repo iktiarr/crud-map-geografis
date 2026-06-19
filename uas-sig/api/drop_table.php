@@ -18,7 +18,7 @@ if (empty($table)) {
 
 // Validasi untuk mencegah SQL injection dan penghapusan tabel sistem
 $cleanTable = strtolower(trim($table));
-if (in_array($cleanTable, ['kecamatan', 'fasilitas_kesehatan', 'spatial_ref_sys'])) {
+if (in_array($cleanTable, ['kecamatan', 'fasilitas_kesehatan', 'spatial_ref_sys', 'import_metadata'])) {
     echo json_encode(['status' => 'error', 'message' => 'Tabel sistem utama tidak boleh dihapus!']);
     exit;
 }

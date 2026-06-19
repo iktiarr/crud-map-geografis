@@ -3,26 +3,31 @@
 // =====================================================
 let activeFeatureFilters = {};
 let currentCategoryColumn = null;
+let previewLayerVisible = false;
 
 function populatePreviewDropdown() {
-    const sel = document.getElementById('preview-table-select');
-    if (!sel) return;
-    sel.innerHTML = '<option value="">-- Pilih Tabel --</option>';
+    const options = [];
     tablesList.forEach(t => {
         if (['custom_polygons', 'custom_polylines', 'custom_markers', 'custom_drawings', 'markers'].includes(t.table_name)) return;
-        sel.insertAdjacentHTML('beforeend', `<option value="${t.table_name}">${capitalize(t.table_name)}</option>`);
+        options.push({ value: t.table_name, label: capitalize(t.table_name) });
+    });
+
+    populateCombobox('combo-preview', options, (val) => {
+        const hiddenEl = document.getElementById('preview-table-select');
+        if (hiddenEl) hiddenEl.value = val;
+        previewTable();
     });
 }
 
 async function previewTable() {
-    const sel = document.getElementById('preview-table-select');
-    if (!sel) return;
-    const table = sel.value;
+    const hiddenEl = document.getElementById('preview-table-select');
+    if (!hiddenEl) return;
+    const table = hiddenEl.value;
     if (!table) {
         markerLayer.clearLayers();
         activeData = [];
         activeColumns = [];
-        setupFeatureFilters(null); // Hide filter card
+        setupFeatureFilters(null);
         renderDynamicTable([]);
         return;
     }

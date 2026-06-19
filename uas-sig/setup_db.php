@@ -102,12 +102,7 @@ try {
 // STEP 2: Hapus tabel lama (dengan CASCADE aman)
 // =====================================================
 log_line("\n--- STEP 2: Bersihkan tabel lama ---", 'info');
-try {
-    $pdo->exec("DROP TABLE IF EXISTS fasilitas_kesehatan CASCADE;");
-    log_line("✅ Tabel fasilitas_kesehatan dibersihkan", 'ok');
-} catch (PDOException $e) {
-    log_line("⚠️  fasilitas_kesehatan: " . $e->getMessage(), 'warn');
-}
+// Tabel fasilitas_kesehatan dilewati
 try {
     $pdo->exec("DROP TABLE IF EXISTS kecamatan CASCADE;");
     log_line("✅ Tabel kecamatan dibersihkan", 'ok');
@@ -138,42 +133,14 @@ try {
     exit(1);
 }
 
-// =====================================================
-// STEP 4: Buat tabel FASILITAS_KESEHATAN
-// =====================================================
-log_line("\n--- STEP 4: Buat tabel fasilitas_kesehatan ---", 'info');
-try {
-    $pdo->exec("
-        CREATE TABLE fasilitas_kesehatan (
-            id              SERIAL PRIMARY KEY,
-            nama            VARCHAR(255) NOT NULL,
-            jenis           VARCHAR(50)  NOT NULL
-                            CHECK (jenis IN ('Puskesmas', 'Rumah Sakit', 'Klinik', 'Apotek')),
-            alamat          TEXT,
-            telepon         VARCHAR(20),
-            status          VARCHAR(30) DEFAULT 'Aktif'
-                            CHECK (status IN ('Aktif', 'Tidak Aktif')),
-            kecamatan_id    INT REFERENCES kecamatan(id) ON DELETE SET NULL,
-            geom            GEOMETRY(Point, 4326),
-            created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-    ");
-    log_line("✅ Tabel fasilitas_kesehatan dibuat", 'ok');
-} catch (PDOException $e) {
-    log_line("❌ Gagal buat fasilitas_kesehatan: " . $e->getMessage(), 'error');
-    if ($is_web) echo "</pre></div></div></div></body></html>";
-    exit(1);
-}
+// STEP 4: Buat tabel fasilitas_kesehatan (Dilewati)
 
 // =====================================================
 // STEP 5: Buat Spatial Index
 // =====================================================
 log_line("\n--- STEP 5: Buat Spatial Index ---", 'info');
 $indexes = [
-    "CREATE INDEX idx_kecamatan_geom    ON kecamatan USING GIST(geom);",
-    "CREATE INDEX idx_fasilitas_geom    ON fasilitas_kesehatan USING GIST(geom);",
-    "CREATE INDEX idx_fasilitas_kec_id  ON fasilitas_kesehatan(kecamatan_id);",
+    "CREATE INDEX IF NOT EXISTS idx_kecamatan_geom    ON kecamatan USING GIST(geom);",
 ];
 foreach ($indexes as $idx_sql) {
     try {
@@ -182,6 +149,54 @@ foreach ($indexes as $idx_sql) {
     } catch (PDOException $e) {
         log_line("⚠️  Index: " . $e->getMessage(), 'warn');
     }
+}
+
+// =====================================================
+// STEP 5.5: Buat Tabel Kustom Gambar (custom_drawings, dll.)
+// =====================================================
+log_line("\n--- STEP 5.5: Buat Tabel Kustom Gambar ---", 'info');
+try {
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS custom_polygons (
+            id SERIAL PRIMARY KEY,
+            nama_wilayah VARCHAR(255) NOT NULL,
+            geom GEOMETRY(Polygon, 4326),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS custom_polylines (
+            id SERIAL PRIMARY KEY,
+            nama_polyline VARCHAR(255) NOT NULL,
+            geom GEOMETRY(LineString, 4326),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS custom_markers (
+            id SERIAL PRIMARY KEY,
+            nama_marker VARCHAR(255) NOT NULL,
+            deskripsi TEXT,
+            geom GEOMETRY(Point, 4326),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS custom_drawings (
+            id SERIAL PRIMARY KEY,
+            nama VARCHAR(255) NOT NULL,
+            tipe VARCHAR(50) NOT NULL,
+            warna VARCHAR(50) DEFAULT '#ef4444',
+            deskripsi TEXT,
+            geom GEOMETRY(GEOMETRY, 4326),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_custom_polygons_geom ON custom_polygons USING GIST(geom);
+        CREATE INDEX IF NOT EXISTS idx_custom_polylines_geom ON custom_polylines USING GIST(geom);
+        CREATE INDEX IF NOT EXISTS idx_custom_markers_geom ON custom_markers USING GIST(geom);
+        CREATE INDEX IF NOT EXISTS idx_custom_drawings_geom ON custom_drawings USING GIST(geom);
+    ");
+    log_line("✅ Tabel kustom gambar berhasil dibuat/dipastikan ada", 'ok');
+} catch (PDOException $e) {
+    log_line("❌ Gagal buat tabel kustom gambar: " . $e->getMessage(), 'error');
 }
 
 // =====================================================
@@ -198,11 +213,9 @@ $total_fas = 0;
 // =====================================================
 log_line("\n--- VERIFIKASI AKHIR ---", 'info');
 $total_kec = $pdo->query("SELECT COUNT(*) FROM kecamatan")->fetchColumn();
-$total_fas = $pdo->query("SELECT COUNT(*) FROM fasilitas_kesehatan")->fetchColumn();
 $postgis   = $pdo->query("SELECT PostGIS_version()")->fetchColumn();
 
 log_line("📍 Kecamatan  : $total_kec baris", 'ok');
-log_line("🏥 Fasilitas  : $total_fas baris", 'ok');
 log_line("🗺️  PostGIS   : $postgis", 'ok');
 log_line("\n🎉 SELESAI! Database siap digunakan.", 'ok');
 

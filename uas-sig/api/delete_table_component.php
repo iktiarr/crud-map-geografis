@@ -20,7 +20,7 @@ $cleanTable = strtolower(trim($table));
 $cleanComp = strtolower(trim($component));
 
 // Validasi untuk mencegah SQL injection dan penghapusan tabel sistem catalog
-if (!preg_match('/^[a-z0-9_]+$/', $cleanTable) || in_array($cleanTable, ['spatial_ref_sys'])) {
+if (!preg_match('/^[a-z0-9_]+$/', $cleanTable) || in_array($cleanTable, ['spatial_ref_sys', 'import_metadata'])) {
     echo json_encode(['status' => 'error', 'message' => 'Nama tabel tidak valid']);
     exit;
 }
