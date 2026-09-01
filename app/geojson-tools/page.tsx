@@ -1,163 +1,222 @@
-import Link from "next/link";
-import { ArrowLeft, FileCode, Upload, Download, Copy, Terminal } from "lucide-react";
+"use client";
+
+import * as React from "react";
+import { FileCode, Upload, Download, Copy, Terminal, Check, Trash2 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme-toggle";
-
-export const metadata = {
-  title: "GeoJSON Tools & Exporter - GeoSpatial Suite",
-  description: "Impor, ekspor, validasi struktur spasial GeoJSON, dan konversi format shapefile.",
-};
-
-const sampleGeoJson = {
-  "type": "FeatureCollection",
-  "name": "Titik_Fasilitas_Sample",
-  "crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
-  "features": [
-    {
-      "type": "Feature",
-      "properties": { "id": 1, "nama": "SMAN 1 Kota Utama", "kategori": "Sekolah", "warna": "#678a40" },
-      "geometry": { "type": "Point", "coordinates": [106.8456, -6.2088] }
-    },
-    {
-      "type": "Feature",
-      "properties": { "id": 2, "nama": "RSUD Geografis", "kategori": "Kesehatan", "warna": "#455e2d" },
-      "geometry": { "type": "Point", "coordinates": [106.8510, -6.1950] }
-    }
-  ]
-};
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { SiteHeader } from "@/components/site-header";
+import { SiteFooter } from "@/components/site-footer";
+import { PageHero } from "@/components/page-hero";
+import { useGeoStorage } from "@/hooks/use-geo-storage";
 
 export default function GeoJsonToolsPage() {
+  const { geojsonFiles, addGeoJsonFile, deleteGeoJsonFile, isLoaded } = useGeoStorage();
+
+  const [selectedFileId, setSelectedFileId] = React.useState<string>("");
+  const [copied, setCopied] = React.useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const activeFile =
+    geojsonFiles.find((f) => f.id === selectedFileId) || geojsonFiles[0];
+  const activePayload = activeFile?.content || { type: "FeatureCollection", features: [] };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(JSON.stringify(activePayload, null, 2));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleDownload = () => {
+    const jsonString = JSON.stringify(activePayload, null, 2);
+    const blob = new Blob([jsonString], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = activeFile?.name || "export.geojson";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const parsed = JSON.parse(evt.target?.result as string);
+        const sizeStr = `${(file.size / 1024).toFixed(1)} KB`;
+        const newRecord = addGeoJsonFile({
+          name: file.name,
+          size: sizeStr,
+          content: parsed,
+        });
+        setSelectedFileId(newRecord.id);
+      } catch (err) {
+        alert("Berkas JSON / GeoJSON tidak valid!");
+      }
+    };
+    reader.readAsText(file);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col transition-colors">
-      {/* Top Navigation */}
-      <header className="border-b border-border/80 bg-background/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link 
-              href="/" 
-              className={buttonVariants({ variant: "outline", size: "sm", className: "inline-flex items-center gap-2 text-xs" })}
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Kembali ke Beranda</span>
-            </Link>
-            <div className="h-4 w-px bg-border" />
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-xl bg-primary/10 text-primary border border-primary/20">
-                <FileCode className="w-4 h-4" />
-              </div>
-              <span className="font-semibold text-sm sm:text-base tracking-tight">GeoJSON Tools & Converter</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <Badge variant="secondary" className="font-mono text-xs hidden sm:inline-flex">
-              RFC 7946 Standard
-            </Badge>
-            <ThemeToggle />
-          </div>
-        </div>
-      </header>
+      {/* Reusable Header */}
+      <SiteHeader
+        title="GeoJSON Tools & Converter"
+        icon={FileCode}
+        badge="Independent GeoJSON Store"
+      />
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 w-full">
-        {/* Header Hero with Typeset */}
-        <div className="typeset typeset-notes max-w-[48em] mb-8">
-          <div className="not-typeset inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-secondary text-secondary-foreground border border-border mb-3">
-            <FileCode className="w-3.5 h-3.5 text-primary" />
-            Spatial Format Converter & Validator
-          </div>
-          <h1 className="tracking-tight text-foreground mb-2">
-            GeoJSON & Shapefile Converter
-          </h1>
-          <p className="text-muted-foreground">
-            Alat bantu konversi dan validasi berkas geospasial (GeoJSON, KML, TopoJSON, Shapefile, CSV Koordinat) dengan inspeksi struktur payload langsung.
-          </p>
-        </div>
+        {/* Reusable Hero Header */}
+        <PageHero
+          badge="Spatial Format Converter & Validator"
+          badgeIcon={FileCode}
+          title="GeoJSON & Shapefile Converter"
+          description="Simpan, konversi, validasi dan unduh berkas GeoJSON langsung dari peramban Anda. Format standar RFC 7946 dengan koordinat WGS84. Berkas tersimpan mandiri khusus modul ini."
+        />
 
         {/* Tools Interface */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           {/* JSON Viewer with Typeset */}
-          <Card className="border-border bg-card backdrop-blur">
-            <CardHeader className="p-4 border-b border-border/80 flex flex-row items-center justify-between">
+          <Card className="lg:col-span-2 border-border bg-card backdrop-blur">
+            <CardHeader className="p-4 border-b border-border/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <CardTitle className="text-sm font-medium text-foreground flex items-center gap-2">
                   <Terminal className="w-4 h-4 text-primary" />
-                  Live GeoJSON Payload Viewer
+                  Live GeoJSON Payload: {activeFile?.name || "Memuat..."}
                 </CardTitle>
                 <CardDescription className="text-xs text-muted-foreground">
-                  FeatureCollection valid (2 fitur terdeteksi)
+                  Menampilkan berkas aktif dari penyimpanan mandiri GeoJSON Tools
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2 not-typeset">
-                <Button variant="outline" size="sm" className="h-7 text-xs">
-                  <Copy className="w-3 h-3 mr-1" />
-                  Salin
+                <Button variant="outline" size="sm" onClick={handleCopy} className="h-7 text-xs">
+                  {copied ? <Check className="w-3 h-3 mr-1 text-primary" /> : <Copy className="w-3 h-3 mr-1" />}
+                  {copied ? "Tersalin!" : "Salin"}
                 </Button>
-                <Button size="sm" className="h-7 text-xs">
+                <Button size="sm" onClick={handleDownload} className="h-7 text-xs">
                   <Download className="w-3 h-3 mr-1" />
                   Unduh .geojson
                 </Button>
               </div>
             </CardHeader>
             <CardContent className="p-4">
-              <div className="typeset typeset-notes max-w-none">
-                <pre className="max-h-95 overflow-x-auto text-xs">
-                  <code>{JSON.stringify(sampleGeoJson, null, 2)}</code>
-                </pre>
-              </div>
+              {!isLoaded ? (
+                <div className="space-y-2 p-2">
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-5/6" />
+                  <Skeleton className="h-4 w-2/3" />
+                  <Skeleton className="h-4 w-4/5" />
+                </div>
+              ) : (
+                <div className="typeset typeset-notes max-w-none">
+                  <pre className="max-h-95 overflow-x-auto text-xs">
+                    <code>{JSON.stringify(activePayload, null, 2)}</code>
+                  </pre>
+                </div>
+              )}
             </CardContent>
           </Card>
 
-          {/* Upload & Conversion Options */}
+          {/* Upload & Saved Files */}
           <div className="space-y-6">
+            {/* Upload Box */}
             <Card className="border-border bg-card backdrop-blur">
               <CardHeader className="p-4 border-b border-border/80">
                 <CardTitle className="text-sm font-medium text-foreground flex items-center gap-2">
                   <Upload className="w-4 h-4 text-primary" />
-                  Unggah Berkas Geospasial
+                  Impor Berkas ke GeoJSON Store
                 </CardTitle>
                 <CardDescription className="text-xs text-muted-foreground">
-                  Mendukung .geojson, .json, .kml, .shp (.zip), atau .csv berkolom Lat/Lng
+                  Mendukung berkas .geojson / .json spasial
                 </CardDescription>
               </CardHeader>
-              <CardContent className="p-6 text-center">
-                <div className="border-2 border-dashed border-border hover:border-primary/60 rounded-2xl p-8 transition-colors cursor-pointer bg-muted/20">
-                  <Upload className="w-8 h-8 text-primary mx-auto mb-3" />
-                  <p className="text-xs sm:text-sm font-medium text-foreground mb-1">
-                    Seret & letakkan berkas ke sini, atau klik untuk memilih
+              <CardContent className="p-5 text-center">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileUpload}
+                  accept=".geojson,.json"
+                  className="hidden"
+                />
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="border-2 border-dashed border-border hover:border-primary/60 rounded-2xl p-6 transition-colors cursor-pointer bg-muted/20 group"
+                >
+                  <Upload className="w-7 h-7 text-primary mx-auto mb-2 group-hover:scale-110 transition-transform" />
+                  <p className="text-xs font-medium text-foreground mb-0.5">
+                    Klik untuk pilih berkas .geojson
                   </p>
-                  <p className="text-[11px] text-muted-foreground">
-                    Maksimal 25MB per berkas
+                  <p className="text-[10px] text-muted-foreground">
+                    Disimpan ke LocalStorage browser
                   </p>
                 </div>
               </CardContent>
             </Card>
 
+            {/* Saved Layers List */}
             <Card className="border-border bg-card backdrop-blur">
               <CardHeader className="p-4 pb-2">
                 <CardTitle className="text-sm font-medium text-foreground">
-                  Status Validasi Format
+                  Daftar Berkas GeoJSON Tersimpan ({geojsonFiles.length})
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-4 pt-2 space-y-2 text-xs text-muted-foreground">
-                <div className="flex items-center justify-between p-2 rounded-xl bg-card border border-border">
-                  <span>Sistem Koordinat (CRS)</span>
-                  <Badge variant="outline" className="text-[10px] font-mono">
-                    EPSG:4326 (WGS 84)
-                  </Badge>
-                </div>
-                <div className="flex items-center justify-between p-2 rounded-xl bg-card border border-border">
-                  <span>Geometri Valid</span>
-                  <Badge variant="outline" className="text-[10px]">
-                    Valid (Point & Polygon)
-                  </Badge>
-                </div>
+              <CardContent className="p-4 pt-2 space-y-2 text-xs">
+                {!isLoaded ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-10 w-full rounded-xl" />
+                    <Skeleton className="h-10 w-full rounded-xl" />
+                  </div>
+                ) : (
+                  geojsonFiles.map((file) => (
+                    <div
+                      key={file.id}
+                      onClick={() => setSelectedFileId(file.id)}
+                      className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-colors ${
+                        (selectedFileId || geojsonFiles[0]?.id) === file.id
+                          ? "border-primary bg-primary/10"
+                          : "border-border bg-card hover:border-primary/40"
+                      }`}
+                    >
+                      <div className="truncate max-w-37.5">
+                        <div className="font-semibold text-foreground truncate">{file.name}</div>
+                        <div className="text-[10px] text-muted-foreground">{file.size}</div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {(selectedFileId || geojsonFiles[0]?.id) === file.id && (
+                          <Badge className="text-[10px]">Aktif</Badge>
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteGeoJsonFile(file.id);
+                          }}
+                          className="p-1 rounded text-muted-foreground hover:text-destructive"
+                          title="Hapus berkas"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
               </CardContent>
             </Card>
           </div>
         </div>
       </main>
+
+      {/* Reusable Footer */}
+      <SiteFooter />
     </div>
   );
 }

@@ -1,79 +1,132 @@
-import Link from "next/link";
-import { ArrowLeft, Route, Navigation2, Calculator, MapPin, Gauge } from "lucide-react";
+"use client";
+
+import * as React from "react";
+import { Route, Navigation2, Calculator, MapPin, Gauge, History, Check } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { SiteHeader } from "@/components/site-header";
+import { SiteFooter } from "@/components/site-footer";
+import { PageHero } from "@/components/page-hero";
+import { useGeoStorage } from "@/hooks/use-geo-storage";
 
-export const metadata = {
-  title: "Pengukuran Jarak & Rute Spasial - GeoSpatial Suite",
-  description: "Hitung jarak antar titik koordinat (Haversine Formula), radius buffer jangkauan, dan estimasi rute perjalanan.",
-};
+// Haversine formula to calculate geodesic distance in km
+function calculateHaversine(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // Earth's radius in km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
 
 export default function DistanceRoutingPage() {
+  const { routingWaypoints, routeHistory, addRouteHistory, clearRouteHistory, isLoaded } = useGeoStorage();
+
+  const [fromName, setFromName] = React.useState("Stasiun Gambir (Titik Berangkat)");
+  const [fromLat, setFromLat] = React.useState("-6.1767");
+  const [fromLng, setFromLng] = React.useState("106.8306");
+
+  const [toName, setToName] = React.useState("Gelora Bung Karno (Titik Tujuan)");
+  const [toLat, setToLat] = React.useState("-6.2185");
+  const [toLng, setToLng] = React.useState("106.8018");
+
+  const [distanceKm, setDistanceKm] = React.useState<number>(5.61);
+  const [savedSuccess, setSavedSuccess] = React.useState(false);
+
+  const handleSelectFromMarker = (id: string) => {
+    const found = routingWaypoints.find((m) => m.id === id);
+    if (found) {
+      setFromName(found.name);
+      setFromLat(found.lat.toString());
+      setFromLng(found.lng.toString());
+    }
+  };
+
+  const handleSelectToMarker = (id: string) => {
+    const found = routingWaypoints.find((m) => m.id === id);
+    if (found) {
+      setToName(found.name);
+      setToLat(found.lat.toString());
+      setToLng(found.lng.toString());
+    }
+  };
+
+  const handleCalculate = () => {
+    const lat1 = parseFloat(fromLat) || 0;
+    const lon1 = parseFloat(fromLng) || 0;
+    const lat2 = parseFloat(toLat) || 0;
+    const lon2 = parseFloat(toLng) || 0;
+
+    const result = calculateHaversine(lat1, lon1, lat2, lon2);
+    setDistanceKm(result);
+
+    // Save to local storage history
+    addRouteHistory({
+      fromName,
+      fromLat: lat1,
+      fromLng: lon1,
+      toName,
+      toLat: lat2,
+      toLng: lon2,
+      distanceKm: Number(result.toFixed(2)),
+    });
+
+    setSavedSuccess(true);
+    setTimeout(() => setSavedSuccess(false), 2500);
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col transition-colors">
-      {/* Top Navigation */}
-      <header className="border-b border-border/80 bg-background/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link 
-              href="/" 
-              className={buttonVariants({ variant: "outline", size: "sm", className: "inline-flex items-center gap-2 text-xs" })}
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Kembali ke Beranda</span>
-            </Link>
-            <div className="h-4 w-px bg-border" />
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-xl bg-primary/10 text-primary border border-primary/20">
-                <Route className="w-4 h-4" />
-              </div>
-              <span className="font-semibold text-sm sm:text-base tracking-tight">Jarak & Rute Spasial</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <Badge variant="secondary" className="font-mono text-xs hidden sm:inline-flex">
-              Haversine & OSRM
-            </Badge>
-            <ThemeToggle />
-          </div>
-        </div>
-      </header>
+      {/* Reusable Header */}
+      <SiteHeader
+        title="Jarak & Rute Spasial"
+        icon={Route}
+        badge="Independent Routing Waypoints"
+      />
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 w-full">
-        {/* Header Hero with Typeset */}
-        <div className="typeset typeset-notes max-w-[48em] mb-8">
-          <div className="not-typeset inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-secondary text-secondary-foreground border border-border mb-3">
-            <Route className="w-3.5 h-3.5 text-primary" />
-            Distance Matrix & Buffer Analysis
-          </div>
-          <h1 className="tracking-tight text-foreground mb-2">
-            Pengukuran Jarak & Perutean
-          </h1>
-          <p className="text-muted-foreground">
-            Hitung jarak geodesik akurat antar titik koordinat, visualisasikan zona buffer jangkauan fasilitas (radius 1km, 3km, 5km), serta kalkulasi rute terdekat.
-          </p>
-        </div>
+        {/* Reusable Hero Header */}
+        <PageHero
+          badge="Distance Matrix & Buffer Analysis"
+          badgeIcon={Route}
+          title="Pengukuran Jarak & Perutean"
+          description="Hitung jarak geodesik akurat antar titik koordinat, visualisasikan zona buffer jangkauan fasilitas, serta simpan riwayat pengukuran ke dataset khusus rute ini."
+        />
 
         {/* Interface Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           {/* Calculator Card */}
           <Card className="lg:col-span-2 border-border bg-card backdrop-blur">
-            <CardHeader className="p-4 border-b border-border/80">
-              <CardTitle className="text-base text-foreground flex items-center gap-2">
-                <Calculator className="w-4 h-4 text-primary" />
-                Kalkulator Jarak Geodesik (Formula Haversine)
-              </CardTitle>
-              <CardDescription className="text-xs text-muted-foreground font-mono">
-                Kalkulasi presisi kelengkungan bumi (WGS84 Earth Radius = 6,371 km)
-              </CardDescription>
+            <CardHeader className="p-4 border-b border-border/80 flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-base text-foreground flex items-center gap-2">
+                  <Calculator className="w-4 h-4 text-primary" />
+                  Kalkulator Jarak Geodesik (Formula Haversine)
+                </CardTitle>
+                <CardDescription className="text-xs text-muted-foreground font-mono">
+                  Presisi kelengkungan bumi (WGS84 Earth Radius = 6,371 km)
+                </CardDescription>
+              </div>
+              {savedSuccess && (
+                <Badge variant="secondary" className="text-primary text-[10px] flex items-center gap-1">
+                  <Check className="w-3 h-3" />
+                  Tersimpan di Riwayat
+                </Badge>
+              )}
             </CardHeader>
+
             <CardContent className="p-6 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Point A */}
-                <div className="p-4 rounded-2xl border border-border bg-card/60 space-y-2">
+                <div className="p-4 rounded-2xl border border-border bg-card/60 space-y-2.5">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-primary flex items-center gap-1.5">
                       <MapPin className="w-3.5 h-3.5" /> Titik Asal (Point A)
@@ -82,28 +135,51 @@ export default function DistanceRoutingPage() {
                       Asal
                     </Badge>
                   </div>
+
+                  {/* Pick from saved routing waypoints dropdown */}
+                  <div>
+                    <label className="text-[10px] text-muted-foreground block mb-1">
+                      Pilih dari Waypoint Rute Khusus:
+                    </label>
+                    <select
+                      onChange={(e) => handleSelectFromMarker(e.target.value)}
+                      className="w-full bg-background border border-border rounded-xl p-1.5 text-xs text-foreground focus:outline-none focus:border-primary"
+                    >
+                      <option value="">-- Pilih Waypoint Rute --</option>
+                      {routingWaypoints.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name} ({m.category})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
                   <div>
                     <label className="text-[11px] text-muted-foreground block mb-0.5">Nama Titik</label>
                     <input
                       type="text"
-                      defaultValue="SMAN 1 Kota Utama"
+                      value={fromName}
+                      onChange={(e) => setFromName(e.target.value)}
                       className="w-full bg-background border border-border rounded-xl p-1.5 text-xs text-foreground focus:outline-none focus:border-primary"
                     />
                   </div>
+
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
-                      <label className="text-[10px] text-muted-foreground">Lat</label>
+                      <label className="text-[10px] text-muted-foreground">Latitude</label>
                       <input
                         type="text"
-                        defaultValue="-6.2088"
+                        value={fromLat}
+                        onChange={(e) => setFromLat(e.target.value)}
                         className="w-full bg-background border border-border rounded-xl p-1 text-foreground font-mono text-[11px]"
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] text-muted-foreground">Lng</label>
+                      <label className="text-[10px] text-muted-foreground">Longitude</label>
                       <input
                         type="text"
-                        defaultValue="106.8456"
+                        value={fromLng}
+                        onChange={(e) => setFromLng(e.target.value)}
                         className="w-full bg-background border border-border rounded-xl p-1 text-foreground font-mono text-[11px]"
                       />
                     </div>
@@ -111,7 +187,7 @@ export default function DistanceRoutingPage() {
                 </div>
 
                 {/* Point B */}
-                <div className="p-4 rounded-2xl border border-border bg-card/60 space-y-2">
+                <div className="p-4 rounded-2xl border border-border bg-card/60 space-y-2.5">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-primary flex items-center gap-1.5">
                       <MapPin className="w-3.5 h-3.5" /> Titik Tujuan (Point B)
@@ -120,28 +196,51 @@ export default function DistanceRoutingPage() {
                       Tujuan
                     </Badge>
                   </div>
+
+                  {/* Pick from saved routing waypoints dropdown */}
+                  <div>
+                    <label className="text-[10px] text-muted-foreground block mb-1">
+                      Pilih dari Waypoint Rute Khusus:
+                    </label>
+                    <select
+                      onChange={(e) => handleSelectToMarker(e.target.value)}
+                      className="w-full bg-background border border-border rounded-xl p-1.5 text-xs text-foreground focus:outline-none focus:border-primary"
+                    >
+                      <option value="">-- Pilih Waypoint Rute --</option>
+                      {routingWaypoints.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name} ({m.category})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
                   <div>
                     <label className="text-[11px] text-muted-foreground block mb-0.5">Nama Titik</label>
                     <input
                       type="text"
-                      defaultValue="RSUD Geografis Medika"
+                      value={toName}
+                      onChange={(e) => setToName(e.target.value)}
                       className="w-full bg-background border border-border rounded-xl p-1.5 text-xs text-foreground focus:outline-none focus:border-primary"
                     />
                   </div>
+
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
-                      <label className="text-[10px] text-muted-foreground">Lat</label>
+                      <label className="text-[10px] text-muted-foreground">Latitude</label>
                       <input
                         type="text"
-                        defaultValue="-6.1950"
+                        value={toLat}
+                        onChange={(e) => setToLat(e.target.value)}
                         className="w-full bg-background border border-border rounded-xl p-1 text-foreground font-mono text-[11px]"
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] text-muted-foreground">Lng</label>
+                      <label className="text-[10px] text-muted-foreground">Longitude</label>
                       <input
                         type="text"
-                        defaultValue="106.8510"
+                        value={toLng}
+                        onChange={(e) => setToLng(e.target.value)}
                         className="w-full bg-background border border-border rounded-xl p-1 text-foreground font-mono text-[11px]"
                       />
                     </div>
@@ -152,21 +251,25 @@ export default function DistanceRoutingPage() {
               {/* Calculated Result Box */}
               <div className="p-4 rounded-2xl bg-secondary border border-border flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div>
-                  <div className="text-xs text-muted-foreground">Hasil Jarak Garis Lurus (Straight Line Distance):</div>
+                  <div className="text-xs text-muted-foreground">Hasil Jarak Garis Lurus (Geodesic Straight Line):</div>
                   <div className="text-2xl sm:text-3xl font-bold font-mono text-primary mt-0.5">
-                    1.65 km <span className="text-xs font-normal text-muted-foreground">(1,650 meter)</span>
+                    {distanceKm.toFixed(2)} km{" "}
+                    <span className="text-xs font-normal text-muted-foreground">
+                      ({(distanceKm * 1000).toLocaleString()} meter)
+                    </span>
                   </div>
                 </div>
-                <Button size="sm" className="text-xs whitespace-nowrap not-typeset">
+                <Button size="sm" onClick={handleCalculate} className="text-xs whitespace-nowrap not-typeset shadow-xs">
                   <Navigation2 className="w-3.5 h-3.5 mr-1.5" />
-                  Kalkulasi Ulang
+                  Hitung & Simpan Riwayat
                 </Button>
               </div>
             </CardContent>
           </Card>
 
-          {/* Buffer & Range Settings */}
+          {/* Buffer & Route History */}
           <div className="space-y-6">
+            {/* Range Buffer */}
             <Card className="border-border bg-card backdrop-blur">
               <CardHeader className="p-4 pb-2">
                 <CardTitle className="text-sm font-medium text-foreground flex items-center gap-2">
@@ -174,10 +277,10 @@ export default function DistanceRoutingPage() {
                   Radius Buffer Jangkauan
                 </CardTitle>
                 <CardDescription className="text-xs text-muted-foreground">
-                  Visualisasi zona cakupan lingkaran
+                  Visualisasi zona cakupan dari Titik Asal
                 </CardDescription>
               </CardHeader>
-              <CardContent className="p-4 pt-2 space-y-3 text-xs text-foreground">
+              <CardContent className="p-4 pt-2 space-y-2 text-xs text-foreground">
                 <div className="flex items-center justify-between p-2 rounded-xl bg-card border border-border">
                   <span>Radius 1 km (Jalan Kaki)</span>
                   <Badge variant="secondary" className="text-[10px]">
@@ -198,9 +301,54 @@ export default function DistanceRoutingPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Route History */}
+            <Card className="border-border bg-card backdrop-blur">
+              <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between">
+                <CardTitle className="text-sm font-medium text-foreground flex items-center gap-2">
+                  <History className="w-4 h-4 text-primary" />
+                  Riwayat Pengukuran ({routeHistory.length})
+                </CardTitle>
+                {routeHistory.length > 0 && (
+                  <button
+                    onClick={clearRouteHistory}
+                    className="text-[10px] text-muted-foreground hover:text-destructive"
+                  >
+                    Hapus Semua
+                  </button>
+                )}
+              </CardHeader>
+              <CardContent className="p-4 pt-2 space-y-2 text-xs">
+                {!isLoaded ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-12 w-full rounded-xl" />
+                    <Skeleton className="h-12 w-full rounded-xl" />
+                  </div>
+                ) : routeHistory.length === 0 ? (
+                  <div className="text-center text-muted-foreground text-xs py-4">
+                    Belum ada riwayat pengukuran
+                  </div>
+                ) : (
+                  routeHistory.slice(0, 4).map((r) => (
+                    <div key={r.id} className="p-2 rounded-xl bg-card border border-border text-[11px] space-y-1">
+                      <div className="flex items-center justify-between font-medium text-foreground">
+                        <span className="truncate max-w-35">{r.fromName} ➔ {r.toName}</span>
+                        <span className="font-mono text-primary font-bold">{r.distanceKm} km</span>
+                      </div>
+                      <div className="text-[10px] text-muted-foreground font-mono">
+                        {new Date(r.createdAt).toLocaleTimeString()}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
           </div>
         </div>
       </main>
+
+      {/* Reusable Footer */}
+      <SiteFooter />
     </div>
   );
 }

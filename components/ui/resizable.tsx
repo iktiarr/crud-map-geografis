@@ -1,0 +1,57 @@
+"use client";
+
+import * as React from "react";
+import * as ResizablePrimitive from "react-resizable-panels";
+import { cn } from "@/lib/utils";
+
+function ResizablePanelGroup({
+  className,
+  direction,
+  orientation,
+  ...props
+}: ResizablePrimitive.GroupProps & {
+  direction?: "horizontal" | "vertical";
+}) {
+  const resolvedOrientation = orientation || direction || "horizontal";
+
+  return (
+    <ResizablePrimitive.Group
+      data-slot="resizable-panel-group"
+      orientation={resolvedOrientation}
+      className={cn(
+        "flex h-full w-full aria-[orientation=vertical]:flex-col",
+        className
+      )}
+      {...props}
+    />
+  );
+}
+
+function ResizablePanel({ ...props }: ResizablePrimitive.PanelProps) {
+  return <ResizablePrimitive.Panel data-slot="resizable-panel" {...props} />;
+}
+
+function ResizableHandle({
+  withHandle,
+  className,
+  ...props
+}: ResizablePrimitive.SeparatorProps & {
+  withHandle?: boolean;
+}) {
+  return (
+    <ResizablePrimitive.Separator
+      data-slot="resizable-handle"
+      className={cn(
+        "relative flex w-px items-center justify-center bg-border ring-offset-background after:absolute after:inset-y-0 after:left-1/2 after:w-1.5 after:-translate-x-1/2 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-hidden aria-[orientation=horizontal]:h-px aria-[orientation=horizontal]:w-full aria-[orientation=horizontal]:after:left-0 aria-[orientation=horizontal]:after:h-1.5 aria-[orientation=horizontal]:after:w-full aria-[orientation=horizontal]:after:translate-x-0 aria-[orientation=horizontal]:after:-translate-y-1/2 [&[aria-orientation=horizontal]>div]:rotate-90 cursor-col-resize",
+        className
+      )}
+      {...props}
+    >
+      {withHandle && (
+        <div className="z-10 flex h-7 w-1.5 shrink-0 rounded-full bg-muted-foreground/40 hover:bg-primary transition-colors" />
+      )}
+    </ResizablePrimitive.Separator>
+  );
+}
+
+export { ResizableHandle, ResizablePanel, ResizablePanelGroup };

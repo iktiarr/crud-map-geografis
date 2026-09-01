@@ -1,0 +1,138 @@
+export interface BasemapOption {
+  id: string;
+  name: string;
+  type: string;
+  url: string;
+  attribution: string;
+  maxZoom: number;
+  subdomains?: string[];
+  description: string;
+  previewColor: string;
+}
+
+export const BASEMAP_OPTIONS: BasemapOption[] = [
+  {
+    id: "osm-standard",
+    name: "OpenStreetMap Standar",
+    type: "Jalan",
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 19,
+    subdomains: ["a", "b", "c"],
+    description: "Peta jalan resmi global dengan nama jalan & gedung.",
+    previewColor: "#678a40",
+  },
+  {
+    id: "esri-satellite",
+    name: "Citra Satelit ESRI",
+    type: "Foto Satelit",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    attribution: "Tiles &copy; Esri",
+    maxZoom: 18,
+    description: "Citra foto satelit permukaan bumi resolusi tinggi.",
+    previewColor: "#2563eb",
+  },
+  {
+    id: "esri-clarity",
+    name: "ESRI Satelit Jernih",
+    type: "Foto Satelit",
+    url: "https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    attribution: "Tiles &copy; Esri Clarity",
+    maxZoom: 18,
+    description: "Citra satelit paling jernih bebas tutupan awan.",
+    previewColor: "#0284c7",
+  },
+  {
+    id: "esri-streets",
+    name: "ESRI Street Map",
+    type: "Jalan",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
+    attribution: "Tiles &copy; Esri",
+    maxZoom: 18,
+    description: "Peta jalan kartografi jelas dengan rute jalan raya.",
+    previewColor: "#0ea5e9",
+  },
+  {
+    id: "esri-topo",
+    name: "ESRI Topografi",
+    type: "Topografi",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+    attribution: "Tiles &copy; Esri",
+    maxZoom: 18,
+    description: "Peta kontur elevasi bumi dengan bayangan relief.",
+    previewColor: "#84cc16",
+  },
+  {
+    id: "esri-natgeo",
+    name: "National Geographic",
+    type: "Kartografi",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}",
+    attribution: "Tiles &copy; NatGeo & Esri",
+    maxZoom: 16,
+    description: "Gaya peta klasik National Geographic yang artistik.",
+    previewColor: "#eab308",
+  },
+  {
+    id: "esri-ocean",
+    name: "ESRI Kelautan & Samudra",
+    type: "Kelautan",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}",
+    attribution: "Tiles &copy; Esri Ocean",
+    maxZoom: 13,
+    description: "Batimetri kedalaman laut, palung, dan samudra.",
+    previewColor: "#06b6d4",
+  },
+  {
+    id: "esri-relief",
+    name: "ESRI Shaded Relief",
+    type: "Relief",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}",
+    attribution: "Tiles &copy; Esri Relief",
+    maxZoom: 13,
+    description: "Visualisasi bentuk fisik perbukitan dan gunung.",
+    previewColor: "#d97706",
+  },
+  {
+    id: "esri-terrain",
+    name: "ESRI Terrain Base",
+    type: "Topografi",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}",
+    attribution: "Tiles &copy; Esri Terrain",
+    maxZoom: 13,
+    description: "Relief elevasi tanah dan dataran tinggi bumi.",
+    previewColor: "#ca8a04",
+  },
+  {
+    id: "opentopomap",
+    name: "OpenTopoMap Kontur",
+    type: "Relief",
+    url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+    attribution: '&copy; <a href="https://opentopomap.org">OpenTopoMap</a>',
+    maxZoom: 17,
+    subdomains: ["a", "b", "c"],
+    description: "Garis kontur ketinggian dan bukit/lembah.",
+    previewColor: "#10b981",
+  },
+  {
+    id: "osm-hot",
+    name: "OSM Humanitarian (HOT)",
+    type: "Fasilitas",
+    url: "https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 19,
+    subdomains: ["a", "b", "c"],
+    description: "Peta kemanusiaan dengan fokus fasilitas umum.",
+    previewColor: "#e11d48",
+  },
+  {
+    id: "cyclosm",
+    name: "CyclOSM Jalur Sepeda",
+    type: "Navigasi",
+    url: "https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png",
+    attribution: '&copy; <a href="https://www.cyclosm.org">CyclOSM</a>',
+    maxZoom: 18,
+    subdomains: ["a", "b", "c"],
+    description: "Peta navigasi rute sepeda dan jalur terbuka.",
+    previewColor: "#8b5cf6",
+  },
+];
