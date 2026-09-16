@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIG Spasial - Versi Statis</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Custom Style -->
+    <link rel="stylesheet" href="assets/css/style.css">
+    
+    <style>
+        .polygon-tooltip {
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-size: 10px;
+            font-weight: 700;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            color: var(--text-primary);
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1><i class="fas fa-map-marked-alt"></i> SIG <span>Spasial</span> - Demo Statis</h1>
+        <a href="index.php" class="btn-back"><i class="fas fa-arrow-left"></i> Kembali ke Dashboard</a>
+    </header>
+
+    <div class="app-layout">
+        <!-- Sidebar Panel Kiri -->
+        <aside class="sidebar no-scrollbar">
+            <div class="sidebar-header">
+                <i class="fas fa-sliders-h" style="color: var(--text-primary);"></i>
+                <h2>Panel Kontrol (Statis)</h2>
+            </div>
+            
+            <div class="sidebar-scroll no-scrollbar">
+                
+                <!-- 1. Daftar Elemen -->
+                <div class="panel-section">
+                    <h3><i class="fas fa-layer-group"></i> 1. Elemen Tersimpan</h3>
+                    
+                    <div style="margin-bottom: 0.75rem;">
+                        <span style="font-size: 0.75rem; font-weight: bold; color: var(--text-secondary);">Daftar Wilayah (Polygon):</span>
+                        <ul id="wilayah-list" class="elements-list no-scrollbar">
+                            <!-- Populated dynamically -->
+                        </ul>
+                    </div>
+
+                    <div>
+                        <span style="font-size: 0.75rem; font-weight: bold; color: var(--text-secondary);">Daftar Marker (Titik):</span>
+                        <ul id="marker-list" class="elements-list no-scrollbar">
+                            <!-- Populated dynamically -->
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- 2. Panel Analisis Spasial -->
+                <div class="panel-section">
+                    <h3><i class="fas fa-project-diagram"></i> 2. Pilihan Wilayah</h3>
+                    
+                    <div class="form-group">
+                        <label for="wilayah_a">Wilayah A (Polygon 1)</label>
+                        <select id="wilayah_a" class="form-control" onchange="runAnalysis()">
+                            <option value="">-- Pilih Wilayah A --</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label for="wilayah_b">Wilayah B (Polygon 2)</label>
+                        <select id="wilayah_b" class="form-control" onchange="runAnalysis()">
+                            <option value="">-- Pilih Wilayah B --</option>
+                        </select>
+                    </div>
+
+                    <button class="btn btn-primary btn-sm" onclick="runAnalysis()" style="width: 100%; justify-content: center; gap: 0.5rem; margin-top: 0.25rem;">
+                        <i class="fas fa-sync-alt"></i> Hitung Operasi Spasial
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area Kanan -->
+        <main class="main-content no-scrollbar">
+            <!-- Peta Utama di Atas -->
+            <div class="main-map-wrapper">
+                <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 0.75rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="fas fa-map" style="color: var(--text-primary);"></i> Peta Utama (Visualisasi Wilayah & Marker)
+                </h3>
+                <div class="main-map-container">
+                    <div id="map"></div>
+                </div>
+            </div>
+
+            <!-- 5 Visual Maps Hasil Analisis di Bawah -->
+            <div class="sub-maps-section">
+                <h3 class="sub-maps-section-title">
+                    <i class="fas fa-th-large"></i> Hasil Visualisasi Spasial Himpunan (Client-side Turf.js)
+                </h3>
+                
+                <div class="sub-maps-grid">
+                    <!-- Map 1: Union (A dan B) -->
+                    <div class="sub-map-card">
+                        <h4>
+                            <span>1. Wilayah A dan B (Union)</span>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span id="badge-union" class="badge">0 Titik</span>
+                            </div>
+                        </h4>
+                        <div id="sub-map-union" class="sub-map-container"></div>
+                    </div>
+
+                    <!-- Map 2: A - B -->
+                    <div class="sub-map-card">
+                        <h4>
+                            <span>2. Wilayah A tapi bukan B</span>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span id="badge-diff-ab" class="badge">0 Titik</span>
+                            </div>
+                        </h4>
+                        <div id="sub-map-diff-ab" class="sub-map-container"></div>
+                    </div>
+
+                    <!-- Map 3: B - A -->
+                    <div class="sub-map-card">
+                        <h4>
+                            <span>3. Wilayah B tapi bukan A</span>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span id="badge-diff-ba" class="badge">0 Titik</span>
+                            </div>
+                        </h4>
+                        <div id="sub-map-diff-ba" class="sub-map-container"></div>
+                    </div>
+
+                    <!-- Map 4: Outside A dan B -->
+                    <div class="sub-map-card">
+                        <h4>
+                            <span>4. Selain Wilayah A dan B</span>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span id="badge-outside" class="badge">0 Titik</span>
+                            </div>
+                        </h4>
+                        <div id="sub-map-outside" class="sub-map-container"></div>
+                    </div>
+
+                    <!-- Map 5: Intersection (Irisan) -->
+                    <div class="sub-map-card">
+                        <h4>
+                            <span>5. Irisan A dan B (Gray Style)</span>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span id="badge-intersect" class="badge">0 Titik</span>
+                            </div>
+                        </h4>
+                        <div id="sub-map-intersect" class="sub-map-container"></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Leaflet & Turf.js Scripts -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+
+    <!-- Script Utama (Statis) -->
+    <script>
+        // Data Wilayah
+        const wilayahData = [
+            {
+                id: 3,
+                nama_wilayah: "Wilayah A",
+                geojson: {"type":"Polygon","coordinates":[[[107.339492,-5.981603],[107.328502,-7.502194],[108.680345,-7.469545],[108.67485,-5.95431],[107.339492,-5.981603]]]}
+            },
+            {
+                id: 4,
+                nama_wilayah: "Wilayah B",
+                geojson: {"type":"Polygon","coordinates":[[[109.438667,-6.625416],[108.141776,-6.690831],[108.229701,-7.893904],[109.548573,-7.844974],[109.438667,-6.625416]]]}
+            },
+            {
+                id: 5,
+                nama_wilayah: "Wilayah C",
+                geojson: {"type":"Polygon","coordinates":[[[109.379883,-6.201722],[108.918457,-6.911158],[109.797363,-7.336316],[110.983887,-6.420117],[109.379883,-6.201722]]]}
+            }
+        ];
+
+        // Data Marker
+        const markerData = [
+            { id: 5, nama_marker: "Marker 1", geojson: {"type":"Point","coordinates":[107.668184,-6.957466]} },
+            { id: 6, nama_marker: "Marker 2", geojson: {"type":"Point","coordinates":[107.685496,-6.347487]} },
+            { id: 7, nama_marker: "Marker 3", geojson: {"type":"Point","coordinates":[108.240523,-6.336572]} },
+            { id: 8, nama_marker: "Marker 4", geojson: {"type":"Point","coordinates":[108.421868,-7.192224]} },
+            { id: 9, nama_marker: "Marker 5", geojson: {"type":"Point","coordinates":[108.432858,-6.849056]} },
+            { id: 10, nama_marker: "Marker 6", geojson: {"type":"Point","coordinates":[109.081304,-7.638496]} },
+            { id: 11, nama_marker: "Marker 7", geojson: {"type":"Point","coordinates":[109.042836,-7.301112]} },
+            { id: 12, nama_marker: "Marker 8", geojson: {"type":"Point","coordinates":[109.207695,-6.958025]} },
+            { id: 13, nama_marker: "Marker 9", geojson: {"type":"Point","coordinates":[107.113786,-6.887716]} },
+            { id: 14, nama_marker: "Marker 10", geojson: {"type":"Point","coordinates":[107.130262,-6.543223]} },
+            { id: 15, nama_marker: "Marker 11", geojson: {"type":"Point","coordinates":[109.720459,-6.8828]} }
+        ];
+
+        let map;
+        let subMaps = {};
+        let subMapLayers = {
+            union: L.layerGroup(),
+            diffAB: L.layerGroup(),
+            diffBA: L.layerGroup(),
+            outside: L.layerGroup(),
+            intersect: L.layerGroup()
+        };
+
+        const wilayahGroup = L.layerGroup();
+        const markerGroup = L.layerGroup();
+
+        // Icon Marker Kustom
+        const customMarkerIcon = L.divIcon({
+            className: 'custom-marker-icon',
+            html: '<div style="width: 8px; height: 8px; border-radius:50%; background:#fff;"></div>',
+            iconSize: [18, 18],
+            iconAnchor: [9, 9],
+            popupAnchor: [0, -9]
+        });
+
+        // Tentukan warna wilayah berbeda secara dinamis
+        const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#06b6d4', '#ec4899', '#8b5cf6'];
+
+        window.onload = function() {
+            initMap();
+            populateSidebar();
+            populateDropdowns();
+            
+            // Set default pilihan Wilayah A dan B di dropdown
+            document.getElementById('wilayah_a').value = "3";
+            document.getElementById('wilayah_b').value = "4";
+            runAnalysis();
+        };
+
+        function initMap() {
+            // Pusat Jawa Barat/Tengah
+            map = L.map('map').setView([-6.914744, 108.5], 8);
+
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                maxZoom: 20
+            }).addTo(map);
+
+            wilayahGroup.addTo(map);
+            markerGroup.addTo(map);
+
+            // Gambar wilayah di peta utama
+            wilayahData.forEach((w, index) => {
+                const color = colors[index % colors.length];
+                const layer = L.geoJSON(w.geojson, {
+                    style: {
+                        color: color,
+                        weight: 2.5,
+                        fillColor: color,
+                        fillOpacity: 0.18
+                    }
+                }).addTo(wilayahGroup);
+
+                layer.bindTooltip(w.nama_wilayah, {
+                    permanent: true,
+                    direction: 'center',
+                    className: 'polygon-tooltip'
+                });
+                layer.bindPopup(`<strong>${w.nama_wilayah}</strong>`);
+            });
+
+            // Gambar marker di peta utama
+            markerData.forEach(m => {
+                const latlng = [m.geojson.coordinates[1], m.geojson.coordinates[0]];
+                const marker = L.marker(latlng, { icon: customMarkerIcon }).addTo(markerGroup);
+                marker.bindPopup(`<strong>${m.nama_marker}</strong>`);
+            });
+
+            // Inisialisasi 5 sub-maps
+            const subMapIds = {
+                union: 'sub-map-union',
+                diffAB: 'sub-map-diff-ab',
+                diffBA: 'sub-map-diff-ba',
+                outside: 'sub-map-outside',
+                intersect: 'sub-map-intersect'
+            };
+
+            for (const key in subMapIds) {
+                subMaps[key] = L.map(subMapIds[key], {
+                    zoomControl: false,
+                    dragging: false,
+                    scrollWheelZoom: false,
+                    doubleClickZoom: false,
+                    boxZoom: false,
+                    touchZoom: false,
+                    keyboard: false
+                }).setView([-6.914744, 108.5], 8);
+
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                    maxZoom: 20
+                }).addTo(subMaps[key]);
+
+                subMapLayers[key].addTo(subMaps[key]);
+            }
+
+            // Sinkronisasi zoom/pan
+            map.on('move', syncSubMapsView);
+            map.on('zoomend', syncSubMapsView);
+            
+            // Fit bounds peta utama mencakup semua wilayah
+            const allLayers = [];
+            wilayahGroup.eachLayer(layer => {
+                allLayers.push(layer);
+            });
+            if (allLayers.length > 0) {
+                const groupBounds = L.featureGroup(allLayers).getBounds();
+                map.fitBounds(groupBounds, { padding: [20, 20] });
+            }
+        }
+
+        function syncSubMapsView() {
+            const center = map.getCenter();
+            const zoom = map.getZoom();
+            for (const key in subMaps) {
+                if (subMaps[key]) {
+                    subMaps[key].setView(center, zoom, { animate: false });
+                }
+            }
+        }
+
+        function populateSidebar() {
+            const wilayahList = document.getElementById('wilayah-list');
+            const markerList = document.getElementById('marker-list');
+
+            wilayahList.innerHTML = '';
+            wilayahData.forEach((w, index) => {
+                const color = colors[index % colors.length];
+                wilayahList.innerHTML += `
+                    <li class="element-item">
+                        <span class="element-name" style="color: ${color};"><i class="fas fa-draw-polygon"></i> ${w.nama_wilayah}</span>
+                        <span class="badge" style="background-color: ${color}; color: #fff; border: none; font-size: 0.65rem;">Wilayah</span>
+                    </li>
+                `;
+            });
+
+            markerList.innerHTML = '';
+            markerData.forEach(m => {
+                markerList.innerHTML += `
+                    <li class="element-item">
+                        <span class="element-name" style="color: #18181b;"><i class="fas fa-map-marker-alt"></i> ${m.nama_marker}</span>
+                        <span class="badge" style="background-color: #18181b; color: #fff; border: none; font-size: 0.65rem;">Marker</span>
+                    </li>
+                `;
+            });
+        }
+
+        function populateDropdowns() {
+            const dropdownA = document.getElementById('wilayah_a');
+            const dropdownB = document.getElementById('wilayah_b');
+
+            wilayahData.forEach(w => {
+                const optA = document.createElement('option');
+                optA.value = w.id;
+                optA.innerText = w.nama_wilayah;
+                dropdownA.appendChild(optA);
+
+                const optB = document.createElement('option');
+                optB.value = w.id;
+                optB.innerText = w.nama_wilayah;
+                dropdownB.appendChild(optB);
+            });
+        }
+
+        // Jalankan Operasi Spasial Client-side Turf.js
+        function runAnalysis() {
+            const valA = document.getElementById('wilayah_a').value;
+            const valB = document.getElementById('wilayah_b').value;
+
+            if (!valA || !valB) {
+                alert("Silakan pilih Wilayah A dan B terlebih dahulu.");
+                return;
+            }
+
+            const wA = wilayahData.find(w => w.id == valA);
+            const wB = wilayahData.find(w => w.id == valB);
+
+            if (!wA || !wB) return;
+
+            // Bersihkan layer sub-maps
+            for (const key in subMapLayers) {
+                subMapLayers[key].clearLayers();
+            }
+
+            // Buat outline transparan A & B untuk semua sub-maps sebagai referensi
+            for (const key in subMaps) {
+                L.geoJSON(wA.geojson, {
+                    style: { color: '#000', weight: 1.5, dashArray: '4, 4', fill: false }
+                }).addTo(subMapLayers[key]);
+
+                L.geoJSON(wB.geojson, {
+                    style: { color: '#000', weight: 1.5, dashArray: '4, 4', fill: false }
+                }).addTo(subMapLayers[key]);
+            }
+
+            // 1. Union (A U B)
+            try {
+                let unionGeo = turf.union(wA.geojson, wB.geojson);
+                if (unionGeo) {
+                    L.geoJSON(unionGeo, {
+                        style: { color: '#8b5cf6', fillColor: '#8b5cf6', fillOpacity: 0.2, weight: 2 }
+                    }).addTo(subMapLayers.union);
+                    plotFilteredMarkers('union', unionGeo);
+                }
+            } catch (e) { console.error(e); }
+
+            // 2. A - B
+            try {
+                let diffAB = turf.difference(wA.geojson, wB.geojson);
+                if (diffAB) {
+                    L.geoJSON(diffAB, {
+                        style: { color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.2, weight: 2 }
+                    }).addTo(subMapLayers.diffAB);
+                    plotFilteredMarkers('diffAB', diffAB);
+                } else {
+                    document.getElementById('badge-diff-ab').innerText = "0 Titik";
+                }
+            } catch (e) { console.error(e); }
+
+            // 3. B - A
+            try {
+                let diffBA = turf.difference(wB.geojson, wA.geojson);
+                if (diffBA) {
+                    L.geoJSON(diffBA, {
+                        style: { color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.2, weight: 2 }
+                    }).addTo(subMapLayers.diffBA);
+                    plotFilteredMarkers('diffBA', diffBA);
+                } else {
+                    document.getElementById('badge-diff-ba').innerText = "0 Titik";
+                }
+            } catch (e) { console.error(e); }
+
+            // 4. Outside A dan B (Complement)
+            try {
+                let worldEnv = turf.bboxPolygon([-180, -90, 180, 90]);
+                let unionAB = turf.union(wA.geojson, wB.geojson);
+                let outside = turf.difference(worldEnv, unionAB);
+                if (outside) {
+                    L.geoJSON(outside, {
+                        style: { color: '#06b6d4', fillColor: '#06b6d4', fillOpacity: 0.1, weight: 1 }
+                    }).addTo(subMapLayers.outside);
+                    plotFilteredMarkers('outside', outside);
+                }
+            } catch (e) { console.error(e); }
+
+            // 5. Intersection (A n B)
+            try {
+                let intersect = turf.intersect(wA.geojson, wB.geojson);
+                if (intersect) {
+                    L.geoJSON(intersect, {
+                        style: { color: '#6b7280', fillColor: '#6b7280', fillOpacity: 0.25, weight: 2 }
+                    }).addTo(subMapLayers.intersect);
+                    plotFilteredMarkers('intersect', intersect);
+                } else {
+                    document.getElementById('badge-intersect').innerText = "0 Titik";
+                }
+            } catch (e) { console.error(e); }
+
+            // Sinkronkan view sub-maps setelah dimuat
+            syncSubMapsView();
+        }
+
+        // Tampilkan marker yang terfilter pada sub-maps
+        function plotFilteredMarkers(key, geometry) {
+            let count = 0;
+            markerData.forEach(m => {
+                const pt = turf.point(m.geojson.coordinates);
+                let inside = false;
+                
+                // Cek apakah point di dalam polygon
+                try {
+                    inside = turf.booleanPointInPolygon(pt, geometry);
+                } catch(err) {
+                    console.error(err);
+                }
+
+                if (inside) {
+                    count++;
+                    const latlng = [m.geojson.coordinates[1], m.geojson.coordinates[0]];
+                    const subMarker = L.marker(latlng, { icon: customMarkerIcon }).addTo(subMapLayers[key]);
+                    subMarker.bindPopup(`<strong>${m.nama_marker}</strong>`);
+                }
+            });
+
+            // Update badge text
+            const badgeIds = {
+                union: 'badge-union',
+                diffAB: 'badge-diff-ab',
+                diffBA: 'badge-diff-ba',
+                outside: 'badge-outside',
+                intersect: 'badge-intersect'
+            };
+            document.getElementById(badgeIds[key]).innerText = `${count} Titik`;
+        }
+    </script>
+</body>
+</html>
