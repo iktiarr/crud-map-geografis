@@ -64,13 +64,13 @@ export default function GlobalMapsPage() {
             isMobilePanelOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
           }`}
         >
-          <div className="p-3.5 border-b border-border/80 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="p-1.5 rounded-xl bg-primary/10 text-primary border border-primary/20">
-                <MapIcon className="w-4 h-4" />
+          <div className="p-4 border-b border-border/80 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-full bg-secondary text-foreground border border-border shadow-2xs">
+                <MapIcon className="w-4 h-4 text-primary" />
               </div>
               <div>
-                <h3 className="font-bold text-sm text-foreground">
+                <h3 className="font-extrabold text-sm text-foreground">
                   Jenis Tampilan Peta
                 </h3>
               </div>
@@ -79,7 +79,7 @@ export default function GlobalMapsPage() {
               variant="ghost"
               size="icon-sm"
               onClick={() => setIsMobilePanelOpen(false)}
-              className="md:hidden h-7 w-7 text-muted-foreground hover:text-foreground"
+              className="md:hidden h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
             >
               <X className="w-4 h-4" />
             </Button>
@@ -88,14 +88,14 @@ export default function GlobalMapsPage() {
           <div className="p-3 border-b border-border/60">
             <Link
               href="/"
-              className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-all group"
+              className="flex items-center gap-2.5 px-4 py-2 rounded-full text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-secondary/70 transition-all group"
             >
               <Home className="w-4 h-4 text-primary group-hover:scale-110 transition-transform shrink-0" />
               <span>Kembali ke Beranda</span>
             </Link>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+          <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
             {BASEMAP_OPTIONS.map((mapOption) => {
               const isSelected = activeBasemapId === mapOption.id;
 
@@ -103,16 +103,16 @@ export default function GlobalMapsPage() {
                 <div
                   key={mapOption.id}
                   onClick={() => handleSelectMap(mapOption.id)}
-                  className={`p-3 rounded-xl border transition-colors cursor-pointer group ${
+                  className={`p-3.5 rounded-2xl border transition-all cursor-pointer group ${
                     isSelected
-                      ? "border-primary bg-primary/10 ring-1 ring-primary/30 shadow-xs"
-                      : "border-border/80 bg-card hover:border-primary/40 hover:bg-muted/40"
+                      ? "border-primary bg-card ring-2 ring-primary/40 shadow-xs"
+                      : "border-border/80 bg-card hover:border-primary/50 hover:bg-secondary/40"
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2.5">
                       <span
-                        className="w-2.5 h-2.5 rounded-full shrink-0 shadow-xs"
+                        className="w-3 h-3 rounded-full shrink-0 shadow-xs"
                         style={{ backgroundColor: mapOption.previewColor }}
                       />
                       <span className="font-bold text-xs sm:text-sm text-foreground group-hover:text-primary transition-colors">
@@ -120,17 +120,17 @@ export default function GlobalMapsPage() {
                       </span>
                     </div>
                     {isSelected ? (
-                      <Badge className="text-xs bg-primary text-primary-foreground h-4.5 px-1.5 font-medium rounded-md shrink-0">
-                        <Check className="w-2.5 h-2.5 mr-0.5" />
+                      <Badge className="text-xs bg-primary text-primary-foreground h-5 px-2 font-semibold rounded-full shrink-0">
+                        <Check className="w-3 h-3 mr-0.5" />
                         Aktif
                       </Badge>
                     ) : (
-                      <Badge variant="outline" className="text-xs text-muted-foreground font-normal h-4.5 px-1.5 rounded-md shrink-0">
+                      <Badge variant="outline" className="text-xs text-muted-foreground font-medium h-5 px-2 rounded-full shrink-0 border-border">
                         {mapOption.type}
                       </Badge>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground leading-relaxed pl-4.5">
+                  <p className="text-xs text-muted-foreground leading-relaxed pl-5.5">
                     {mapOption.description}
                   </p>
                 </div>
@@ -144,7 +144,7 @@ export default function GlobalMapsPage() {
             <Button
               size="sm"
               onClick={() => setIsMobilePanelOpen(true)}
-              className="rounded-xl shadow-lg text-xs font-semibold h-9 px-3 gap-1.5 bg-card/95 backdrop-blur-md text-foreground border border-border hover:bg-card hover:border-primary/50"
+              className="rounded-full shadow-lg text-xs font-semibold h-10 px-4 gap-2 bg-card/95 backdrop-blur-md text-foreground border border-border hover:bg-card hover:border-primary/50"
             >
               <Layers className="w-4 h-4 text-primary" />
               <span>Gaya Peta ({activeBasemap.name})</span>

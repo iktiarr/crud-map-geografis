@@ -59,16 +59,16 @@ export default function HeatmapDensityPage() {
 
             <CardContent className="p-4 sm:p-8 min-h-65 sm:min-h-87.5 relative bg-muted/20 flex flex-col items-center justify-center text-center overflow-hidden">
               <div 
-                className="absolute top-1/4 left-1/3 w-40 h-40 bg-olive-drab-400/20 rounded-full blur-3xl pointer-events-none transition-opacity"
+                className="absolute top-1/4 left-1/3 w-40 h-40 bg-primary/20 rounded-full blur-3xl pointer-events-none transition-opacity"
                 style={{ opacity: opacity / 100 }}
               />
               <div 
-                className="absolute bottom-1/3 right-1/4 w-48 h-48 bg-olive-drab-600/25 rounded-full blur-3xl pointer-events-none transition-opacity"
+                className="absolute bottom-1/3 right-1/4 w-48 h-48 bg-[#ffd11a]/20 rounded-full blur-3xl pointer-events-none transition-opacity"
                 style={{ opacity: opacity / 100 }}
               />
 
               <div className="typeset typeset-notes max-w-[32em] relative z-10 text-center">
-                <div className="not-typeset w-16 h-16 rounded-2xl bg-primary/10 border border-primary/30 text-primary mx-auto flex items-center justify-center mb-4 shadow-sm animate-bounce">
+                <div className="not-typeset w-16 h-16 rounded-full bg-secondary border border-border text-primary mx-auto flex items-center justify-center mb-4 shadow-sm animate-bounce">
                   <Flame className="w-8 h-8" />
                 </div>
                 {!isLoaded ? (
@@ -82,7 +82,7 @@ export default function HeatmapDensityPage() {
                   </div>
                 ) : (
                   <>
-                    <h3 className="font-semibold text-foreground mb-2">
+                    <h3 className="font-extrabold text-foreground text-lg mb-2">
                       {heatmapPoints.length} Titik Hotspot Kepadatan Tinggi
                     </h3>
                     <p className="text-muted-foreground mb-5 text-sm">
@@ -91,7 +91,7 @@ export default function HeatmapDensityPage() {
 
                     <div className="not-typeset flex flex-wrap justify-center gap-1.5 pt-2">
                       {Object.entries(categoriesCount).map(([cat, count]) => (
-                        <Badge key={cat} variant="outline" className="text-[10px]">
+                        <Badge key={cat} variant="outline" className="text-xs font-mono font-medium rounded-full border-border">
                           {cat}: {count}
                         </Badge>
                       ))}
@@ -142,8 +142,8 @@ export default function HeatmapDensityPage() {
                 </div>
 
                 <div className="pt-2 border-t border-border">
-                  <span className="text-muted-foreground block mb-2 font-medium">Skema Gradien Warna:</span>
-                  <div className="h-4 rounded-md bg-linear-to-r from-olive-drab-200 via-olive-drab-500 to-olive-drab-900 shadow-inner" />
+                  <span className="text-muted-foreground block mb-2 font-medium">Skema Gradien Warna (Wise Semantic):</span>
+                  <div className="h-4 rounded-full bg-linear-to-r from-[#2ead4b] via-[#ffd11a] to-[#d03238] shadow-inner" />
                   <div className="flex justify-between text-[10px] text-muted-foreground mt-1 font-mono">
                     <span>Rendah (0.0)</span>
                     <span>Tinggi (1.0)</span>

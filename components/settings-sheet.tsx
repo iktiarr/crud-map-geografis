@@ -19,7 +19,9 @@ import {
   Palette,
   Edit3,
   Lock,
-  Loader2
+  Loader2,
+  LogIn,
+  UserPlus
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { 
@@ -38,7 +40,7 @@ import { ConfirmModal } from "@/components/confirm-modal";
 type SettingsView = "main" | "profile" | "theme";
 
 export function SettingsSheet() {
-  const { user, isAuthenticated, logout, updateProfile } = useAuth();
+  const { user, isAuthenticated, logout, updateProfile, openAuthModal } = useAuth();
   const { theme, setTheme } = useTheme();
 
   const [isOpen, setIsOpen] = React.useState(false);
@@ -155,18 +157,18 @@ export function SettingsSheet() {
               aria-label="Buka Pengaturan"
             >
               {isAuthenticated && user && (
-                <div className="hidden md:flex items-center gap-2 px-3.5 py-2 rounded-xl bg-secondary/80 group-hover:bg-secondary border border-border text-sm font-medium text-foreground transition-all shadow-xs">
-                  <div className="w-6 h-6 rounded-xl bg-primary text-primary-foreground font-bold text-xs flex items-center justify-center shrink-0">
+                <div className="hidden md:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-secondary/80 group-hover:bg-secondary border border-border text-sm font-semibold text-foreground transition-all shadow-xs">
+                  <div className="w-5.5 h-5.5 rounded-full bg-primary text-primary-foreground font-bold text-xs flex items-center justify-center shrink-0">
                     {userInitial}
                   </div>
                   <span className="truncate max-w-36">{user.username}</span>
                 </div>
               )}
               <div
-                className="h-10 w-10 rounded-xl border border-border bg-card/80 group-hover:bg-accent text-foreground shadow-xs transition-transform group-hover:scale-105 flex items-center justify-center shrink-0"
+                className="h-9 w-9 rounded-full border border-border bg-card hover:border-primary hover:bg-[#cdffad]/20 text-foreground shadow-xs transition-colors flex items-center justify-center shrink-0"
                 title="Buka Pengaturan"
               >
-                <Settings className="w-5 h-5 text-foreground" />
+                <Settings className="w-4.5 h-4.5 text-foreground" />
               </div>
             </button>
           }
@@ -174,7 +176,7 @@ export function SettingsSheet() {
 
         <SheetContent side="right" className="p-0 flex flex-col justify-between overflow-hidden sm:max-w-md">
           <div className="flex flex-col h-full overflow-hidden">
-            <SheetHeader className="p-4 sm:p-5 border-b border-border/80 shrink-0">
+            <SheetHeader className="p-4 sm:p-5 border-b border-border shrink-0">
               <div className="flex items-center gap-3">
                 {currentView !== "main" ? (
                   <Button
@@ -188,13 +190,13 @@ export function SettingsSheet() {
                         setCurrentView("main");
                       }
                     }}
-                    className="h-9 w-9 rounded-xl text-muted-foreground hover:text-foreground shrink-0 -ml-1"
+                    className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground shrink-0 -ml-1"
                     title="Kembali"
                   >
-                    <ArrowLeft className="w-4.5 h-4.5" />
+                    <ArrowLeft className="w-4 h-4" />
                   </Button>
                 ) : (
-                  <div className="w-9 h-9 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center text-primary shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-secondary border border-border flex items-center justify-center text-foreground shrink-0 shadow-2xs">
                     <Settings className="w-4.5 h-4.5" />
                   </div>
                 )}
@@ -216,7 +218,52 @@ export function SettingsSheet() {
             <div className="flex-1 overflow-y-auto p-4 sm:p-5 flex flex-col">
               {currentView === "main" && (
                 <div className="space-y-5 animate-in fade-in duration-150 flex-1 flex flex-col justify-between">
-                  <div className="space-y-2">
+                  <div className="space-y-3">
+                    {!isAuthenticated && (
+                      <div className="p-4 rounded-2xl border border-border bg-card space-y-3 shadow-xs">
+                        <div className="flex items-start gap-3">
+                          <div className="p-2.5 rounded-full bg-secondary border border-border text-foreground shrink-0 shadow-2xs">
+                            <Lock className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="text-sm font-extrabold text-foreground">
+                              Masuk ke Akun Anda
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                              Masuk atau daftarkan akun untuk membuka seluruh modul spasial & sinkronisasi data Anda.
+                            </div>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => {
+                              setIsOpen(false);
+                              openAuthModal({ tab: "login" });
+                            }}
+                            className="w-full text-xs font-semibold rounded-full h-9 shadow-xs cursor-pointer"
+                          >
+                            <LogIn className="w-3.5 h-3.5 mr-1.5" />
+                            Masuk
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setIsOpen(false);
+                              openAuthModal({ tab: "register" });
+                            }}
+                            className="w-full text-xs font-semibold rounded-full h-9 border-border text-foreground hover:bg-secondary cursor-pointer"
+                          >
+                            <UserPlus className="w-3.5 h-3.5 mr-1.5" />
+                            Daftar Akun
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="text-xs sm:text-sm font-bold uppercase tracking-wider text-muted-foreground px-1 mb-1.5 font-mono">
                       Menu Pengaturan
                     </div>
@@ -224,35 +271,35 @@ export function SettingsSheet() {
                     <button
                       type="button"
                       onClick={() => { resetForm(); setCurrentView("profile"); }}
-                      className="w-full p-3.5 rounded-xl border border-border/80 bg-card hover:bg-muted/50 hover:border-primary/40 flex items-center justify-between transition-all text-left group"
+                      className="w-full p-4 rounded-2xl border border-border bg-card hover:bg-secondary/60 flex items-center justify-between transition-colors text-left group cursor-pointer shadow-2xs"
                     >
-                      <div className="flex items-center gap-3.5">
-                        <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
-                          <User className="w-5 h-5" />
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 rounded-full bg-secondary text-foreground border border-border shrink-0 shadow-2xs">
+                          <User className="w-4.5 h-4.5" />
                         </div>
                         <div>
-                          <div className="text-sm sm:text-base font-semibold text-foreground group-hover:text-primary transition-colors">
+                          <div className="text-sm sm:text-base font-bold text-foreground group-hover:text-primary transition-colors">
                             Profil Pengguna
                           </div>
                           <div className="text-xs sm:text-sm text-muted-foreground">
-                            Nama, email, kontak, dan alamat
+                            {isAuthenticated && user ? "Nama, email, kontak, dan alamat" : "Belum masuk (Klik untuk melihat)"}
                           </div>
                         </div>
                       </div>
-                      <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0" />
+                      <ChevronRight className="w-4.5 h-4.5 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition-all shrink-0" />
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setCurrentView("theme")}
-                      className="w-full p-3.5 rounded-xl border border-border/80 bg-card hover:bg-muted/50 hover:border-primary/40 flex items-center justify-between transition-all text-left group"
+                      className="w-full p-4 rounded-2xl border border-border bg-card hover:bg-secondary/60 flex items-center justify-between transition-colors text-left group cursor-pointer shadow-2xs"
                     >
-                      <div className="flex items-center gap-3.5">
-                        <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
-                          <Palette className="w-5 h-5" />
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 rounded-full bg-secondary text-foreground border border-border shrink-0 shadow-2xs">
+                          <Palette className="w-4.5 h-4.5" />
                         </div>
                         <div>
-                          <div className="text-sm sm:text-base font-semibold text-foreground group-hover:text-primary transition-colors">
+                          <div className="text-sm sm:text-base font-bold text-foreground group-hover:text-primary transition-colors">
                             Tema & Tampilan
                           </div>
                           <div className="text-xs sm:text-sm text-muted-foreground">
@@ -260,10 +307,8 @@ export function SettingsSheet() {
                           </div>
                         </div>
                       </div>
-                      <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0" />
+                      <ChevronRight className="w-4.5 h-4.5 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition-all shrink-0" />
                     </button>
-
-
                   </div>
 
                   {isAuthenticated && (
@@ -271,9 +316,9 @@ export function SettingsSheet() {
                       <Button
                         variant="outline"
                         onClick={() => setIsLogoutConfirmOpen(true)}
-                        className="w-full text-sm font-semibold text-destructive hover:bg-destructive/10 hover:border-destructive/30 rounded-xl h-11 shadow-xs"
+                        className="w-full text-sm font-semibold text-destructive hover:bg-destructive/10 hover:border-destructive/30 rounded-full h-10 shadow-xs"
                       >
-                        <LogOut className="w-4.5 h-4.5 mr-2" />
+                        <LogOut className="w-4 h-4 mr-2" />
                         Keluar dari Akun
                       </Button>
                     </div>
@@ -380,7 +425,7 @@ export function SettingsSheet() {
                             <Button
                               type="submit"
                               disabled={isSavingProfile}
-                              className="w-full text-sm font-semibold h-11 rounded-xl shadow-xs"
+                              className="w-full text-sm font-semibold h-11 rounded-full shadow-xs cursor-pointer"
                             >
                               {isSavingProfile ? (
                                 <>
@@ -402,7 +447,7 @@ export function SettingsSheet() {
                                 setIsEditingProfile(false);
                                 setProfileError(null);
                               }}
-                              className="w-full text-sm font-medium h-10 rounded-xl"
+                              className="w-full text-sm font-semibold h-10 rounded-full border-border cursor-pointer hover:bg-secondary"
                             >
                               Batalkan
                             </Button>
@@ -411,71 +456,72 @@ export function SettingsSheet() {
                       ) : (
                         <div className="space-y-4 flex-1 flex flex-col justify-between">
                           <div className="space-y-3.5">
-                            <div className="p-4 rounded-xl bg-secondary/70 border border-border flex items-center justify-between gap-3.5">
-                              <div className="flex items-center gap-3.5 min-w-0">
-                                <div className="w-14 h-14 rounded-xl bg-primary text-primary-foreground font-bold text-xl flex items-center justify-center shadow-xs shrink-0">
+                            <div className="p-4 rounded-2xl bg-secondary border border-border flex items-center justify-between gap-3.5 shadow-2xs">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-12 h-12 rounded-full bg-primary text-primary-foreground font-black text-lg flex items-center justify-center shadow-xs shrink-0">
                                   {userInitial}
                                 </div>
                                 <div className="min-w-0">
-                                  <div className="font-bold text-base sm:text-lg text-foreground truncate">
+                                  <div className="font-extrabold text-base text-foreground truncate">
                                     {user.name}
                                   </div>
-                                  <div className="text-sm text-muted-foreground font-mono truncate">
+                                  <div className="text-xs text-muted-foreground font-mono truncate">
                                     @{user.username}
                                   </div>
                                 </div>
                               </div>
-                              <Badge variant="secondary" className="text-xs font-mono px-2.5 py-1 rounded-xl shrink-0">
+                              <Badge variant="secondary" className="text-xs font-mono px-3 py-0.5 rounded-full shrink-0 font-semibold border border-border">
                                 Online
                               </Badge>
                             </div>
 
                             <Button
                               variant="outline"
+                              size="sm"
                               onClick={() => setIsEditingProfile(true)}
-                              className="w-full text-sm font-semibold h-10 rounded-xl border-primary/30 hover:bg-primary/10 text-primary flex items-center justify-center gap-2 shadow-xs"
+                              className="w-full text-sm font-semibold h-9 rounded-full border-border hover:bg-secondary text-foreground flex items-center justify-center gap-2 shadow-xs cursor-pointer"
                             >
                               <Edit3 className="w-4 h-4" />
                               Edit Profil Akun
                             </Button>
 
-                            <div className="space-y-2.5">
+                            <div className="space-y-2">
                               <div className="p-3.5 rounded-xl bg-card border border-border space-y-1">
                                 <div className="flex items-center gap-2 text-muted-foreground font-medium text-xs sm:text-sm">
-                                  <Mail className="w-4 h-4 text-primary" />
+                                  <Mail className="w-4 h-4 text-foreground" />
                                   <span>Alamat Email</span>
                                 </div>
-                                <div className="font-medium text-sm sm:text-base text-foreground truncate pl-6">
+                                <div className="font-medium text-sm text-foreground truncate pl-6">
                                   {user.email}
                                 </div>
                               </div>
 
                               <div className="p-3.5 rounded-xl bg-card border border-border space-y-1">
                                 <div className="flex items-center gap-2 text-muted-foreground font-medium text-xs sm:text-sm">
-                                  <Phone className="w-4 h-4 text-primary" />
+                                  <Phone className="w-4 h-4 text-foreground" />
                                   <span>Nomor HP / WhatsApp</span>
                                 </div>
-                                <div className="font-medium text-sm sm:text-base text-foreground truncate pl-6">
+                                <div className="font-medium text-sm text-foreground truncate pl-6">
                                   {user.phone || "-"}
                                 </div>
                               </div>
 
                               <div className="p-3.5 rounded-xl bg-card border border-border space-y-1">
                                 <div className="flex items-center gap-2 text-muted-foreground font-medium text-xs sm:text-sm">
-                                  <MapPin className="w-4 h-4 text-primary" />
+                                  <MapPin className="w-4 h-4 text-foreground" />
                                   <span>Alamat Domisili</span>
                                 </div>
-                                <div className="font-medium text-sm sm:text-base text-foreground pl-6">
+                                <div className="font-medium text-sm text-foreground pl-6">
                                   {user.address || "-"}
                                 </div>
                               </div>
 
                               <div className="p-3.5 rounded-xl bg-card border border-border space-y-1">
                                 <div className="flex items-center gap-2 text-muted-foreground font-medium text-xs sm:text-sm">
-                                  <Calendar className="w-4 h-4 text-primary" />
+                                  <Calendar className="w-4 h-4 text-foreground" />
                                   <span>Waktu Pendaftaran</span>
                                 </div>
-                                <div className="font-medium text-sm sm:text-base text-foreground pl-6">
+                                <div className="font-medium text-sm text-foreground pl-6">
                                   {formattedDate}
                                 </div>
                               </div>
@@ -486,9 +532,9 @@ export function SettingsSheet() {
                             <Button
                               variant="destructive"
                               onClick={() => setIsLogoutConfirmOpen(true)}
-                              className="w-full text-sm font-semibold h-11 rounded-xl shadow-xs"
+                              className="w-full text-sm font-semibold h-10 rounded-full shadow-xs cursor-pointer"
                             >
-                              <LogOut className="w-4.5 h-4.5 mr-2" />
+                              <LogOut className="w-4 h-4 mr-2" />
                               Keluar dari Akun
                             </Button>
                           </div>
@@ -496,9 +542,41 @@ export function SettingsSheet() {
                       )}
                     </>
                   ) : (
-                    <div className="p-8 text-center text-muted-foreground text-sm space-y-2">
-                      <User className="w-9 h-9 mx-auto text-muted-foreground/60" />
-                      <div>Anda belum masuk ke akun.</div>
+                    <div className="p-6 text-center space-y-4 rounded-2xl border border-border bg-card my-auto shadow-xs">
+                      <div className="w-12 h-12 rounded-full bg-secondary border border-border flex items-center justify-center text-foreground mx-auto shadow-2xs">
+                        <Lock className="w-6 h-6" />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="font-black text-base text-foreground">Anda Belum Masuk ke Akun</div>
+                        <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed max-w-xs mx-auto">
+                          Silakan masuk atau buat akun baru untuk mengelola profil dan mendapatkan akses penuh ke platform.
+                        </p>
+                      </div>
+                      <div className="space-y-2 pt-2 max-w-xs mx-auto">
+                        <Button
+                          type="button"
+                          onClick={() => {
+                            setIsOpen(false);
+                            openAuthModal({ tab: "login" });
+                          }}
+                          className="w-full h-10 text-sm font-semibold rounded-full shadow-xs cursor-pointer"
+                        >
+                          <LogIn className="w-4 h-4 mr-2" />
+                          Masuk Sekarang
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            setIsOpen(false);
+                            openAuthModal({ tab: "register" });
+                          }}
+                          className="w-full h-10 text-sm font-semibold rounded-full border-border cursor-pointer hover:bg-secondary"
+                        >
+                          <UserPlus className="w-4 h-4 mr-2" />
+                          Daftar Akun Baru
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -515,14 +593,14 @@ export function SettingsSheet() {
                       <button
                         type="button"
                         onClick={() => setTheme("light")}
-                        className={`w-full p-3.5 rounded-xl border flex items-center justify-between transition-all text-sm sm:text-base font-semibold ${
+                        className={`w-full p-4 rounded-2xl border flex items-center justify-between transition-all text-sm sm:text-base font-bold cursor-pointer ${
                           theme === "light"
-                            ? "border-primary bg-primary/10 text-primary shadow-xs ring-1 ring-primary/40"
-                            : "border-border bg-card text-foreground hover:border-primary/40"
+                            ? "border-primary bg-card text-foreground shadow-xs ring-2 ring-primary/40"
+                            : "border-border bg-card text-foreground hover:bg-secondary/60"
                         }`}
                       >
                         <div className="flex items-center gap-3">
-                          <Sun className="w-5 h-5" />
+                          <Sun className="w-5 h-5 text-primary" />
                           <span>Mode Terang (Light)</span>
                         </div>
                         {theme === "light" && <Check className="w-5 h-5 text-primary" />}
@@ -531,14 +609,14 @@ export function SettingsSheet() {
                       <button
                         type="button"
                         onClick={() => setTheme("dark")}
-                        className={`w-full p-3.5 rounded-xl border flex items-center justify-between transition-all text-sm sm:text-base font-semibold ${
+                        className={`w-full p-4 rounded-2xl border flex items-center justify-between transition-all text-sm sm:text-base font-bold cursor-pointer ${
                           theme === "dark"
-                            ? "border-primary bg-primary/10 text-primary shadow-xs ring-1 ring-primary/40"
-                            : "border-border bg-card text-foreground hover:border-primary/40"
+                            ? "border-primary bg-card text-foreground shadow-xs ring-2 ring-primary/40"
+                            : "border-border bg-card text-foreground hover:bg-secondary/60"
                         }`}
                       >
                         <div className="flex items-center gap-3">
-                          <Moon className="w-5 h-5" />
+                          <Moon className="w-5 h-5 text-primary" />
                           <span>Mode Gelap (Dark)</span>
                         </div>
                         {theme === "dark" && <Check className="w-5 h-5 text-primary" />}
@@ -547,14 +625,14 @@ export function SettingsSheet() {
                       <button
                         type="button"
                         onClick={() => setTheme("system")}
-                        className={`w-full p-3.5 rounded-xl border flex items-center justify-between transition-all text-sm sm:text-base font-semibold ${
+                        className={`w-full p-4 rounded-2xl border flex items-center justify-between transition-all text-sm sm:text-base font-bold cursor-pointer ${
                           theme === "system"
-                            ? "border-primary bg-primary/10 text-primary shadow-xs ring-1 ring-primary/40"
-                            : "border-border bg-card text-foreground hover:border-primary/40"
+                            ? "border-primary bg-card text-foreground shadow-xs ring-2 ring-primary/40"
+                            : "border-border bg-card text-foreground hover:bg-secondary/60"
                         }`}
                       >
                         <div className="flex items-center gap-3">
-                          <Laptop className="w-5 h-5" />
+                          <Laptop className="w-5 h-5 text-primary" />
                           <span>Sistem Otomatis (Mengikuti OS)</span>
                         </div>
                         {theme === "system" && <Check className="w-5 h-5 text-primary" />}

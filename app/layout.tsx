@@ -1,18 +1,19 @@
 import type { Metadata } from "next";
-import { Inter, Public_Sans } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/contexts/auth-context";
+import { AuthModal } from "@/components/auth/mandatory-auth-modal";
 
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
 });
 
-const publicSans = Public_Sans({
+const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
-  variable: "--font-public-sans",
+  variable: "--font-mono",
 });
 
 export const metadata: Metadata = {
@@ -32,18 +33,19 @@ export default function RootLayout({
       className={cn(
         "h-full antialiased font-sans",
         inter.variable,
-        publicSans.variable
+        jetbrainsMono.variable
       )}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground transition-colors duration-200">
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
+          defaultTheme="dark"
           enableSystem
           disableTransitionOnChange
         >
           <AuthProvider>
             {children}
+            <AuthModal />
           </AuthProvider>
         </ThemeProvider>
       </body>

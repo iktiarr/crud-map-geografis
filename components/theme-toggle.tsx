@@ -5,13 +5,15 @@ import { useTheme } from "next-themes";
 import { Sun, Moon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+const emptySubscribe = () => () => {};
+
 export function ThemeToggle() {
   const { theme, setTheme, resolvedTheme } = useTheme();
-  const [mounted, setMounted] = React.useState(false);
-
-  React.useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = React.useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
 
   if (!mounted) {
     return (
@@ -40,7 +42,7 @@ export function ThemeToggle() {
       {isDark ? (
         <Sun className="w-4 h-4 text-amber-400 transition-transform rotate-0 hover:rotate-45" />
       ) : (
-        <Moon className="w-4 h-4 text-olive-drab-700 transition-transform rotate-0 hover:-rotate-12" />
+        <Moon className="w-4 h-4 text-foreground transition-transform rotate-0 hover:-rotate-12" />
       )}
     </Button>
   );

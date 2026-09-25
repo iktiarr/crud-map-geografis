@@ -30,10 +30,21 @@ export interface UpdateProfilePayload {
   newPassword?: string;
 }
 
+export interface AuthModalOptions {
+  tab?: "login" | "register";
+  redirectTo?: string;
+  moduleTitle?: string;
+  message?: string;
+}
+
 export interface AuthContextType {
   user: AuthUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isAuthModalOpen: boolean;
+  authModalOptions: AuthModalOptions;
+  openAuthModal: (options?: AuthModalOptions) => void;
+  closeAuthModal: () => void;
   login: (identifier: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (payload: RegisterPayload) => Promise<{ success: boolean; error?: string }>;
   updateProfile: (payload: UpdateProfilePayload) => Promise<{ success: boolean; error?: string }>;
@@ -46,6 +57,22 @@ const AuthContext = React.createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = React.useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [isAuthModalOpen, setIsAuthModalOpen] = React.useState(false);
+  const [authModalOptions, setAuthModalOptions] = React.useState<AuthModalOptions>({ tab: "login" });
+
+  const openAuthModal = React.useCallback((options?: AuthModalOptions) => {
+    setAuthModalOptions({
+      tab: options?.tab || "login",
+      redirectTo: options?.redirectTo,
+      moduleTitle: options?.moduleTitle,
+      message: options?.message,
+    });
+    setIsAuthModalOpen(true);
+  }, []);
+
+  const closeAuthModal = React.useCallback(() => {
+    setIsAuthModalOpen(false);
+  }, []);
 
   const checkAuth = React.useCallback(async () => {
     try {
@@ -168,6 +195,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         isLoading,
         isAuthenticated: Boolean(user),
+        isAuthModalOpen,
+        authModalOptions,
+        openAuthModal,
+        closeAuthModal,
         login,
         register,
         updateProfile,

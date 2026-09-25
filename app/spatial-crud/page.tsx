@@ -133,7 +133,7 @@ function GroupActionMenu({
           setIsOpen((prev) => !prev);
           setIsExportSubmenuOpen(false);
         }}
-        className={`p-1.5 rounded-xl border transition-all cursor-pointer ${
+        className={`p-1.5 rounded-full border transition-all cursor-pointer ${
           isOpen
             ? "bg-primary text-primary-foreground border-primary shadow-xs"
             : "border-border/70 hover:bg-muted text-muted-foreground hover:text-foreground"
@@ -144,7 +144,7 @@ function GroupActionMenu({
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 top-full mt-1.5 z-50 min-w-40 bg-popover text-popover-foreground rounded-xl border border-border shadow-xl p-1 space-y-0.5 animate-in fade-in zoom-in-95 duration-150">
+        <div className="absolute right-0 top-full mt-1.5 z-50 min-w-40 bg-popover text-popover-foreground rounded-2xl border border-border shadow-xl p-1.5 space-y-0.5 animate-in fade-in zoom-in-95 duration-150">
           {/* Ubah Nama */}
           <button
             type="button"
@@ -176,7 +176,7 @@ function GroupActionMenu({
 
             {/* Submenu Ekspor */}
             {isExportSubmenuOpen && (
-              <div className="sm:absolute sm:right-full sm:top-0 sm:mr-1.5 mt-1 sm:mt-0 min-w-50 bg-popover text-popover-foreground rounded-xl border border-border shadow-2xl p-1.5 space-y-0.5 z-50 animate-in fade-in zoom-in-95 duration-150">
+              <div className="sm:absolute sm:right-full sm:top-0 sm:mr-1.5 mt-1 sm:mt-0 min-w-50 bg-popover text-popover-foreground rounded-2xl border border-border shadow-2xl p-1.5 space-y-0.5 z-50 animate-in fade-in zoom-in-95 duration-150">
                 <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border/50 mb-1">
                   Format Ekspor Grup:
                 </div>
@@ -950,7 +950,7 @@ export default function SpatialCrudPage() {
             <div className="flex items-center justify-between gap-2">
               <Link
                 href="/"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-background hover:bg-muted text-foreground text-xs font-semibold transition-all border border-border/70 hover:border-primary/50 shadow-xs group"
+                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-card hover:bg-secondary text-foreground text-xs font-semibold transition-all border border-border shadow-xs group"
                 title="Kembali ke Dashboard Utama"
               >
                 <ArrowLeft className="w-3.5 h-3.5 text-primary transition-transform group-hover:-translate-x-1" />
@@ -960,7 +960,7 @@ export default function SpatialCrudPage() {
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => setIsSidePanelOpen(false)}
-                  className="p-1.5 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground md:flex hidden"
+                  className="p-1.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground md:flex hidden"
                   title="Tutup Panel Samping"
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -970,12 +970,12 @@ export default function SpatialCrudPage() {
 
             {/* Title Header */}
             <div>
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-secondary border border-border flex items-center justify-center text-primary shrink-0 shadow-2xs">
                   <MapIcon className="w-4 h-4" />
                 </div>
                 <div>
-                  <h1 className="text-sm font-bold tracking-tight text-foreground leading-tight">
+                  <h1 className="text-sm font-black tracking-tight text-foreground leading-tight">
                     CRUD MAPS
                   </h1>
                 </div>
@@ -994,15 +994,15 @@ export default function SpatialCrudPage() {
             </div>
 
             {/* Navigation Tabs (3 Tabs: Daftar, Tambah Data, Berkas) */}
-            <div className="grid grid-cols-3 gap-1.5 p-1 bg-background rounded-xl border border-border/70 text-xs font-semibold">
+            <div className="grid grid-cols-3 gap-1 p-1 bg-secondary rounded-full border border-border text-xs font-semibold">
               <button
                 onClick={() => {
                   if (editingFeature) handleCancelEdit();
                   setActiveTab("list");
                 }}
-                className={`py-1.5 rounded-xl transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
+                className={`py-1.5 px-2 rounded-full transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
                   activeTab === "list"
-                    ? "bg-primary text-primary-foreground shadow-xs"
+                    ? "bg-card text-foreground shadow-xs font-bold"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
                 title="Daftar Grup & Objek"
@@ -1013,9 +1013,9 @@ export default function SpatialCrudPage() {
 
               <button
                 onClick={() => setActiveTab("draw")}
-                className={`py-1.5 rounded-xl transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
+                className={`py-1.5 px-2 rounded-full transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
                   activeTab === "draw"
-                    ? "bg-primary text-primary-foreground shadow-xs"
+                    ? "bg-card text-foreground shadow-xs font-bold"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
                 title="Tambah Data Spasial Baru"
@@ -1029,9 +1029,9 @@ export default function SpatialCrudPage() {
                   if (editingFeature) handleCancelEdit();
                   setActiveTab("io");
                 }}
-                className={`py-1.5 rounded-xl transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
+                className={`py-1.5 px-2 rounded-full transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
                   activeTab === "io"
-                    ? "bg-primary text-primary-foreground shadow-xs"
+                    ? "bg-card text-foreground shadow-xs font-bold"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
                 title="Impor & Ekspor Berkas GIS"
@@ -1051,7 +1051,7 @@ export default function SpatialCrudPage() {
                 <button
                   type="button"
                   onClick={() => setIsNewGroupModalOpen(true)}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-primary hover:bg-primary/90 active:scale-[0.99] text-primary-foreground text-xs font-bold transition-all shadow-xs cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-full bg-primary hover:bg-[#cdffad] hover:text-[#0e0f0c] active:scale-[0.99] text-primary-foreground text-xs font-bold transition-all shadow-xs cursor-pointer"
                   title="Tambah Grup Baru"
                 >
                   <Plus className="w-4 h-4" />
@@ -1065,26 +1065,26 @@ export default function SpatialCrudPage() {
                     <span className="text-xs">Memuat data dari database PostgreSQL...</span>
                   </div>
                 ) : allGroups.length === 0 ? (
-                  <div className="py-12 text-center text-muted-foreground bg-muted/10 rounded-xl border border-dashed border-border p-6 space-y-3">
-                    <div className="w-12 h-12 mx-auto rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                  <div className="py-12 text-center text-muted-foreground bg-card rounded-2xl border border-dashed border-border p-6 space-y-3.5 shadow-2xs">
+                    <div className="w-12 h-12 mx-auto rounded-full bg-secondary text-primary border border-border flex items-center justify-center shadow-xs">
                       <Folder className="w-6 h-6" />
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-foreground">Belum ada grup</p>
+                      <p className="text-xs font-black text-foreground">Belum ada grup</p>
                       <p className="text-[11px] mt-1 text-muted-foreground">
                         Silakan klik tombol &apos;+ Tambah Grup&apos; di atas untuk membuat grup baru.
                       </p>
                     </div>
                     <button
                       onClick={() => setIsNewGroupModalOpen(true)}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold transition-all shadow-xs cursor-pointer mx-auto"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary hover:bg-[#cdffad] hover:text-[#0e0f0c] text-primary-foreground text-xs font-bold transition-all shadow-xs cursor-pointer mx-auto"
                     >
                       <Plus className="w-4 h-4" />
                       <span>Tambah Grup</span>
                     </button>
                   </div>
                 ) : (
-                  <div className="space-y-2.5">
+                  <div className="space-y-3">
                     {allGroups.map((grp) => {
                       const groupFeatures = features.filter(
                         (f) => (f.group_name || "").toLowerCase() === grp.toLowerCase()
@@ -1096,19 +1096,19 @@ export default function SpatialCrudPage() {
                         <div
                           key={grp}
                           onClick={() => handleEnterGroupAddData(grp)}
-                          className="rounded-xl border border-border/80 bg-card hover:border-primary hover:shadow-md transition-all shadow-2xs overflow-hidden cursor-pointer group"
+                          className="rounded-2xl border border-border bg-card hover:border-primary hover:shadow-md transition-all shadow-2xs overflow-hidden cursor-pointer group"
                         >
                           {/* Baris Utama Grup: Ditekan langsung masuk ke halaman tambah data */}
                           <div
-                            className="p-3 flex items-center justify-between gap-2.5"
+                            className="p-3.5 flex items-center justify-between gap-3"
                             title={`Klik grup "${grp}" untuk langsung masuk ke halaman tambah data`}
                           >
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center group-hover:scale-105 group-hover:bg-primary group-hover:text-primary-foreground transition-all shrink-0">
-                                <Folder className="w-4 h-4" />
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-9 h-9 rounded-full bg-secondary border border-border text-primary flex items-center justify-center group-hover:scale-105 group-hover:border-primary group-hover:bg-[#cdffad] group-hover:text-[#0e0f0c] transition-all shrink-0 shadow-2xs">
+                                <Folder className="w-4 h-4 text-inherit" />
                               </div>
                               <div className="min-w-0">
-                                <h3 className="font-bold text-xs text-foreground group-hover:text-primary transition-colors truncate">
+                                <h3 className="font-extrabold text-xs text-foreground group-hover:text-primary transition-colors truncate">
                                   {grp}
                                 </h3>
                                 <p className="text-[11px] text-muted-foreground truncate">
@@ -1137,7 +1137,7 @@ export default function SpatialCrudPage() {
                                     e.stopPropagation();
                                     toggleGroupExpand(grp);
                                   }}
-                                  className="p-1.5 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                                  className="p-1.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                                   title={isExpanded ? "Tutup daftar objek" : "Lihat objek di grup ini"}
                                 >
                                   <ChevronDown
