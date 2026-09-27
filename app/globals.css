@@ -70,75 +70,75 @@
 }
 
 :root {
-  --background: #e8ebe6;
-  --foreground: #0e0f0c;
-  --card: #ffffff;
-  --card-foreground: #0e0f0c;
+  --background: #ffffff;
+  --foreground: #09090b;
+  --card: #f4f4f4;
+  --card-foreground: #09090b;
   --popover: #ffffff;
-  --popover-foreground: #0e0f0c;
-  --primary: #9fe870;
-  --primary-foreground: #0e0f0c;
-  --secondary: #d8ded3;
-  --secondary-foreground: #0e0f0c;
-  --muted: #dde3d8;
-  --muted-foreground: #52564f;
-  --accent: #e2f6d5;
-  --accent-foreground: #163300;
-  --destructive: #d03238;
+  --popover-foreground: #09090b;
+  --primary: #09090b;
+  --primary-foreground: #ffffff;
+  --secondary: #e4e4e7;
+  --secondary-foreground: #09090b;
+  --muted: #f4f4f4;
+  --muted-foreground: #71717a;
+  --accent: #e4e4e7;
+  --accent-foreground: #09090b;
+  --destructive: #ef4444;
   --destructive-foreground: #ffffff;
-  --border: #d2d8cc;
-  --input: #d2d8cc;
-  --ring: #9fe870;
-  --chart-1: #9fe870;
-  --chart-2: #2ead4b;
-  --chart-3: #ffd11a;
-  --chart-4: #ffc091;
-  --chart-5: #38c8ff;
-  --radius: 24px;
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --ring: #09090b;
+  --chart-1: #09090b;
+  --chart-2: #27272a;
+  --chart-3: #52525b;
+  --chart-4: #71717a;
+  --chart-5: #a1a1aa;
+  --radius: 8px;
   --sidebar: #ffffff;
-  --sidebar-foreground: #0e0f0c;
-  --sidebar-primary: #9fe870;
-  --sidebar-primary-foreground: #0e0f0c;
-  --sidebar-accent: #e2f6d5;
-  --sidebar-accent-foreground: #163300;
-  --sidebar-border: #d2d8cc;
-  --sidebar-ring: #9fe870;
+  --sidebar-foreground: #09090b;
+  --sidebar-primary: #09090b;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f4f4f4;
+  --sidebar-accent-foreground: #09090b;
+  --sidebar-border: #e4e4e7;
+  --sidebar-ring: #09090b;
 }
 
 .dark {
-  --background: #0e0f0c;
-  --foreground: #e8ebe6;
-  --card: #161814;
+  --background: #050505;
+  --foreground: #ffffff;
+  --card: #0d0d10;
   --card-foreground: #ffffff;
-  --popover: #161814;
+  --popover: #0d0d10;
   --popover-foreground: #ffffff;
-  --primary: #9fe870;
-  --primary-foreground: #0e0f0c;
-  --secondary: #222620;
-  --secondary-foreground: #e8ebe6;
-  --muted: #1d211b;
-  --muted-foreground: #868685;
-  --accent: #272d23;
-  --accent-foreground: #9fe870;
-  --destructive: #d03238;
+  --primary: #ffffff;
+  --primary-foreground: #050505;
+  --secondary: #18181b;
+  --secondary-foreground: #ffffff;
+  --muted: #18181b;
+  --muted-foreground: #a1a1aa;
+  --accent: #27272a;
+  --accent-foreground: #ffffff;
+  --destructive: #ef4444;
   --destructive-foreground: #ffffff;
-  --border: #292f25;
-  --input: #292f25;
-  --ring: #9fe870;
-  --chart-1: #9fe870;
-  --chart-2: #2ead4b;
-  --chart-3: #ffd11a;
-  --chart-4: #ffc091;
-  --chart-5: #38c8ff;
-  --radius: 24px;
-  --sidebar: #161814;
-  --sidebar-foreground: #e8ebe6;
-  --sidebar-primary: #9fe870;
-  --sidebar-primary-foreground: #0e0f0c;
-  --sidebar-accent: #222620;
-  --sidebar-accent-foreground: #e8ebe6;
-  --sidebar-border: #292f25;
-  --sidebar-ring: #9fe870;
+  --border: #27272a;
+  --input: #27272a;
+  --ring: #ffffff;
+  --chart-1: #ffffff;
+  --chart-2: #e4e4e7;
+  --chart-3: #a1a1aa;
+  --chart-4: #71717a;
+  --chart-5: #3f3f46;
+  --radius: 8px;
+  --sidebar: #0d0d10;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #ffffff;
+  --sidebar-primary-foreground: #050505;
+  --sidebar-accent: #18181b;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #27272a;
+  --sidebar-ring: #ffffff;
 }
 
 @layer base {
@@ -237,9 +237,9 @@ div {
 .leaflet-popup-content-wrapper {
   background: var(--card) !important;
   color: var(--card-foreground) !important;
-  border-radius: 20px !important;
+  border-radius: 8px !important;
   border: 1px solid var(--border) !important;
-  box-shadow: 0 12px 36px -4px rgba(14, 15, 12, 0.25) !important;
+  box-shadow: 0 12px 36px -4px rgba(0, 0, 0, 0.5) !important;
   padding: 0 !important;
   overflow: hidden !important;
 }
@@ -261,9 +261,9 @@ div {
 
 .leaflet-control-zoom {
   border: 1px solid var(--border) !important;
-  border-radius: 9999px !important;
+  border-radius: 8px !important;
   overflow: hidden !important;
-  box-shadow: 0 4px 16px rgba(14, 15, 12, 0.15) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3) !important;
 }
 
 .leaflet-control-zoom a {

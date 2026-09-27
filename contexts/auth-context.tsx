@@ -118,7 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const login = async (identifier: string, password: string) => {
+  const login = React.useCallback(async (identifier: string, password: string) => {
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
@@ -137,9 +137,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       return { success: false, error: "Terjadi gangguan koneksi ke server." };
     }
-  };
+  }, []);
 
-  const register = async (payload: RegisterPayload) => {
+  const register = React.useCallback(async (payload: RegisterPayload) => {
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST",
@@ -158,9 +158,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       return { success: false, error: "Terjadi gangguan koneksi ke server." };
     }
-  };
+  }, []);
 
-  const updateProfile = async (payload: UpdateProfilePayload) => {
+  const updateProfile = React.useCallback(async (payload: UpdateProfilePayload) => {
     try {
       const res = await fetch("/api/auth/update-profile", {
         method: "POST",
@@ -179,33 +179,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       return { success: false, error: "Terjadi gangguan koneksi ke server." };
     }
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = React.useCallback(async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
     } finally {
       setUser(null);
     }
-  };
+  }, []);
+
+  const value = React.useMemo<AuthContextType>(
+    () => ({
+      user,
+      isLoading,
+      isAuthenticated: Boolean(user),
+      isAuthModalOpen,
+      authModalOptions,
+      openAuthModal,
+      closeAuthModal,
+      login,
+      register,
+      updateProfile,
+      logout,
+      checkAuth,
+    }),
+    [
+      user,
+      isLoading,
+      isAuthModalOpen,
+      authModalOptions,
+      openAuthModal,
+      closeAuthModal,
+      login,
+      register,
+      updateProfile,
+      logout,
+      checkAuth,
+    ]
+  );
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isLoading,
-        isAuthenticated: Boolean(user),
-        isAuthModalOpen,
-        authModalOptions,
-        openAuthModal,
-        closeAuthModal,
-        login,
-        register,
-        updateProfile,
-        logout,
-        checkAuth,
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

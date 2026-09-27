@@ -15,7 +15,7 @@ export async function GET(request: Request) {
         SELECT 
           id, 
           name, 
-          COALESCE(group_name, 'Utama') as group_name,
+          COALESCE(NULLIF(group_name, ''), 'Tanpa Grup') as group_name,
           type, 
           category, 
           description, 
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
           created_at, 
           updated_at 
         FROM spatial_crud_features 
-        WHERE COALESCE(group_name, 'Utama') = ${groupFilter.trim()}
+        WHERE COALESCE(NULLIF(group_name, ''), 'Tanpa Grup') = ${groupFilter.trim()}
         ORDER BY id DESC;
       `;
     } else {
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
         SELECT 
           id, 
           name, 
-          COALESCE(group_name, 'Utama') as group_name,
+          COALESCE(NULLIF(group_name, ''), 'Tanpa Grup') as group_name,
           type, 
           category, 
           description, 
@@ -49,14 +49,15 @@ export async function GET(request: Request) {
       `;
     }
 
-    // Ambil daftar semua grup yang ada di database (fitur + tabel grup)
+    // Ambil daftar semua grup yang ada di database (fitur + tabel grup, tidak termasuk Tanpa Grup/Utama)
     const groupRows = await sql`
       SELECT DISTINCT group_name 
       FROM spatial_crud_features 
-      WHERE group_name IS NOT NULL AND group_name != ''
+      WHERE group_name IS NOT NULL AND group_name != '' AND group_name != 'Tanpa Grup' AND group_name != 'Utama'
       UNION
       SELECT name as group_name 
       FROM spatial_groups
+      WHERE name IS NOT NULL AND name != '' AND name != 'Tanpa Grup' AND name != 'Utama'
       ORDER BY group_name ASC;
     `;
     const distinctGroups = groupRows.map((r) => r.group_name).filter(Boolean);
@@ -125,7 +126,7 @@ export async function POST(request: Request) {
 
     const {
       name,
-      group_name = "Utama",
+      group_name = "Tanpa Grup",
       type = "Point",
       category = "Umum",
       description = "",
@@ -148,7 +149,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const finalGroup = group_name && group_name.trim() ? group_name.trim() : "Utama";
+    const finalGroup = group_name && group_name.trim() ? group_name.trim() : "Tanpa Grup";
     const geojsonString = JSON.stringify(geojson);
     const propertiesJson = JSON.stringify(properties || {});
 

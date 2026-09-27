@@ -143,13 +143,13 @@ export default function GeoJsonToolsPage() {
                 />
                 <div
                   onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-border hover:border-primary/60 rounded-2xl p-6 transition-colors cursor-pointer bg-muted/20 group"
+                  className="border-2 border-dashed border-border hover:border-zinc-500 rounded-lg p-6 transition-colors cursor-pointer bg-muted/20 group"
                 >
-                  <Upload className="w-7 h-7 text-primary mx-auto mb-2 group-hover:scale-110 transition-transform" />
+                  <Upload className="w-6 h-6 text-foreground mx-auto mb-2 group-hover:scale-110 transition-transform" />
                   <p className="text-xs font-medium text-foreground mb-0.5">
                     Klik untuk pilih berkas .geojson
                   </p>
-                  <p className="text-[10px] text-muted-foreground">
+                  <p className="text-[10px] text-muted-foreground font-mono">
                     Disimpan ke LocalStorage browser
                   </p>
                 </div>
@@ -165,23 +165,23 @@ export default function GeoJsonToolsPage() {
               <CardContent className="p-4 pt-2 space-y-2 text-xs">
                 {!isLoaded ? (
                   <div className="space-y-2">
-                    <Skeleton className="h-10 w-full rounded-xl" />
-                    <Skeleton className="h-10 w-full rounded-xl" />
+                    <Skeleton className="h-10 w-full rounded-lg" />
+                    <Skeleton className="h-10 w-full rounded-lg" />
                   </div>
                 ) : (
                   geojsonFiles.map((file) => (
                     <div
                       key={file.id}
                       onClick={() => setSelectedFileId(file.id)}
-                      className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-colors ${
+                      className={`p-2.5 rounded-lg border flex items-center justify-between cursor-pointer transition-colors ${
                         (selectedFileId || geojsonFiles[0]?.id) === file.id
                           ? "border-primary bg-primary/10"
-                          : "border-border bg-card hover:border-primary/40"
+                          : "border-border bg-card hover:border-zinc-500"
                       }`}
                     >
                       <div className="truncate max-w-37.5">
                         <div className="font-semibold text-foreground truncate">{file.name}</div>
-                        <div className="text-[10px] text-muted-foreground">{file.size}</div>
+                        <div className="text-[10px] text-muted-foreground font-mono">{file.size}</div>
                       </div>
                       <div className="flex items-center gap-1">
                         {(selectedFileId || geojsonFiles[0]?.id) === file.id && (

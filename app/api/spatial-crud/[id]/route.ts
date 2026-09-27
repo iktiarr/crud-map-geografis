@@ -37,7 +37,7 @@ export async function PUT(
       );
     }
 
-    const finalGroupName = group_name !== undefined ? (group_name && group_name.trim() ? group_name.trim() : "Utama") : null;
+    const finalGroupName = group_name !== undefined ? (group_name && group_name.trim() ? group_name.trim() : "Tanpa Grup") : null;
 
     let updated;
     if (geojson && geojson.type && geojson.coordinates) {

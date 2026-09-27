@@ -89,7 +89,7 @@ export function StorageManagerDialog() {
 
         <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader className="flex flex-row items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-primary/10 border border-primary/30 flex items-center justify-center text-primary shrink-0">
+            <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center text-primary shrink-0">
               <HardDrive className="w-5 h-5" />
             </div>
             <div>
@@ -106,7 +106,7 @@ export function StorageManagerDialog() {
             {!isLoaded ? (
               <>
                 {[1, 2, 3, 4, 5, 6].map((i) => (
-                  <div key={i} className="p-2.5 rounded-2xl bg-secondary/60 border border-border space-y-2 animate-pulse">
+                  <div key={i} className="p-2.5 rounded-lg bg-secondary/60 border border-border space-y-2 animate-pulse">
                     <Skeleton className="h-3 w-20 mx-auto" />
                     <Skeleton className="h-5 w-12 mx-auto" />
                   </div>
@@ -114,7 +114,7 @@ export function StorageManagerDialog() {
               </>
             ) : (
               <>
-                <div className="p-2.5 rounded-2xl bg-secondary/80 border border-border">
+                <div className="p-2.5 rounded-lg bg-secondary/80 border border-border">
                   <div className="flex items-center justify-center gap-1 text-[11px] text-muted-foreground mb-0.5">
                     <Globe2 className="w-3 h-3 text-primary" />
                     <span>Global Maps</span>
@@ -124,7 +124,7 @@ export function StorageManagerDialog() {
                   </div>
                 </div>
 
-                <div className="p-2.5 rounded-2xl bg-secondary/80 border border-border">
+                <div className="p-2.5 rounded-lg bg-secondary/80 border border-border">
                   <div className="flex items-center justify-center gap-1 text-[11px] text-muted-foreground mb-0.5">
                     <MapPin className="w-3 h-3 text-primary" />
                     <span>Spatial CRUD</span>
@@ -134,7 +134,7 @@ export function StorageManagerDialog() {
                   </div>
                 </div>
 
-                <div className="p-2.5 rounded-2xl bg-secondary/80 border border-border">
+                <div className="p-2.5 rounded-lg bg-secondary/80 border border-border">
                   <div className="flex items-center justify-center gap-1 text-[11px] text-muted-foreground mb-0.5">
                     <Shapes className="w-3 h-3 text-primary" />
                     <span>Poligon Wilayah</span>
@@ -144,7 +144,7 @@ export function StorageManagerDialog() {
                   </div>
                 </div>
 
-                <div className="p-2.5 rounded-2xl bg-secondary/80 border border-border">
+                <div className="p-2.5 rounded-lg bg-secondary/80 border border-border">
                   <div className="flex items-center justify-center gap-1 text-[11px] text-muted-foreground mb-0.5">
                     <FileCode className="w-3 h-3 text-primary" />
                     <span>GeoJSON Tools</span>
@@ -154,7 +154,7 @@ export function StorageManagerDialog() {
                   </div>
                 </div>
 
-                <div className="p-2.5 rounded-2xl bg-secondary/80 border border-border">
+                <div className="p-2.5 rounded-lg bg-secondary/80 border border-border">
                   <div className="flex items-center justify-center gap-1 text-[11px] text-muted-foreground mb-0.5">
                     <Route className="w-3 h-3 text-primary" />
                     <span>Rute Spasial</span>
@@ -164,7 +164,7 @@ export function StorageManagerDialog() {
                   </div>
                 </div>
 
-                <div className="p-2.5 rounded-2xl bg-secondary/80 border border-border">
+                <div className="p-2.5 rounded-lg bg-secondary/80 border border-border">
                   <div className="flex items-center justify-center gap-1 text-[11px] text-muted-foreground mb-0.5">
                     <Flame className="w-3 h-3 text-primary" />
                     <span>Heatmap Hotspot</span>
@@ -213,14 +213,14 @@ export function StorageManagerDialog() {
             </div>
 
             {importStatus === "success" && (
-              <div className="p-2.5 rounded-xl bg-primary/10 border border-primary/30 text-xs text-primary flex items-center gap-2 animate-in fade-in duration-200">
-                <Check className="w-4 h-4 shrink-0" />
+              <div className="p-2.5 rounded-lg bg-secondary border border-border text-xs text-foreground flex items-center gap-2 animate-in fade-in duration-200">
+                <Check className="w-4 h-4 shrink-0 text-emerald-400" />
                 <span>Seluruh database modular berhasil dipulihkan dari file backup!</span>
               </div>
             )}
 
             {importStatus === "error" && (
-              <div className="p-2.5 rounded-xl bg-destructive/10 border border-destructive/30 text-xs text-destructive flex items-center gap-2 animate-in fade-in duration-200">
+              <div className="p-2.5 rounded-lg bg-destructive/10 border border-destructive/30 text-xs text-destructive flex items-center gap-2 animate-in fade-in duration-200">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
                 <span>Format file backup tidak valid. Pastikan file JSON yang benar.</span>
               </div>

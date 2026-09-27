@@ -144,7 +144,7 @@ function AuthModalDialog() {
       }}
     >
       <div 
-        className="w-full max-w-md max-h-[92vh] overflow-y-auto bg-card border border-border rounded-3xl shadow-2xl p-6 sm:p-8 my-auto text-foreground relative animate-in zoom-in-95 duration-200"
+        className="w-full max-w-md max-h-[92vh] overflow-y-auto bg-card border border-border rounded-lg shadow-2xl p-6 sm:p-7 my-auto text-foreground relative animate-in zoom-in-95 duration-200"
         role="dialog"
         aria-modal="true"
       >
@@ -152,32 +152,32 @@ function AuthModalDialog() {
         <button
           type="button"
           onClick={closeAuthModal}
-          className="absolute right-5 top-5 p-2 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary cursor-pointer"
+          className="absolute right-4 top-4 p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary cursor-pointer"
           title="Tutup dialog"
           aria-label="Tutup"
         >
-          <X className="w-5 h-5" />
+          <X className="w-4 h-4" />
         </button>
 
         {/* Header */}
-        <div className="flex items-start gap-3.5 mb-6 pb-4 border-b border-border pr-8">
-          <div className="w-11 h-11 rounded-full bg-secondary border border-border flex items-center justify-center text-foreground shrink-0 shadow-2xs">
+        <div className="flex items-start gap-3 mb-6 pb-4 border-b border-border pr-6">
+          <div className="w-10 h-10 rounded-lg bg-secondary border border-border flex items-center justify-center text-foreground shrink-0 shadow-2xs">
             {authModalOptions?.moduleTitle ? (
-              <Lock className="w-5 h-5" />
+              <Lock className="w-4.5 h-4.5" />
             ) : (
-              <Globe2 className="w-5 h-5" />
+              <Globe2 className="w-4.5 h-4.5" />
             )}
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-black text-lg sm:text-xl tracking-tight text-foreground">Global Studio</span>
+              <span className="font-bold text-lg tracking-tight text-foreground">Global Studio</span>
               {authModalOptions?.moduleTitle ? (
-                <span className="text-xs font-mono px-3 py-0.5 rounded-full bg-secondary border border-border text-foreground font-semibold flex items-center gap-1.5">
+                <span className="text-xs font-mono px-2.5 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground font-medium flex items-center gap-1.5">
                   <Lock className="w-3 h-3 text-muted-foreground" />
                   Perlu Masuk
                 </span>
               ) : (
-                <span className="text-xs font-mono px-3 py-0.5 rounded-full bg-secondary border border-border text-foreground font-semibold">
+                <span className="text-xs font-mono px-2.5 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground font-medium">
                   Autentikasi
                 </span>
               )}
@@ -185,7 +185,7 @@ function AuthModalDialog() {
             <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               {authModalOptions?.moduleTitle ? (
                 <>
-                  Akses untuk modul <span className="font-bold text-foreground">{authModalOptions.moduleTitle}</span> memerlukan akun. Silakan masuk atau daftar terlebih dahulu.
+                  Akses untuk modul <span className="font-semibold text-foreground">{authModalOptions.moduleTitle}</span> memerlukan akun. Silakan masuk atau daftar terlebih dahulu.
                 </>
               ) : (
                 activeTab === "register" ? "Silakan buat akun untuk mengakses platform" : "Silakan masuk ke akun Anda"
@@ -195,16 +195,16 @@ function AuthModalDialog() {
         </div>
 
         {/* Tab Switcher */}
-        <div className="grid grid-cols-2 gap-1 p-1 bg-secondary border border-border rounded-full mb-6 text-sm font-semibold">
+        <div className="grid grid-cols-2 gap-1 p-1 bg-secondary border border-border rounded-lg mb-5 text-sm font-medium">
           <button
             type="button"
             onClick={() => {
               setActiveTab("login");
               setErrorMsg(null);
             }}
-            className={`py-2 px-4 rounded-full transition-all flex items-center justify-center gap-1.5 cursor-pointer text-xs sm:text-sm ${
+            className={`py-1.5 px-3 rounded-md transition-all flex items-center justify-center gap-1.5 cursor-pointer text-xs sm:text-sm ${
               activeTab === "login"
-                ? "bg-card text-foreground shadow-xs font-bold"
+                ? "bg-card text-foreground shadow-xs font-semibold"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -217,9 +217,9 @@ function AuthModalDialog() {
               setActiveTab("register");
               setErrorMsg(null);
             }}
-            className={`py-2 px-4 rounded-full transition-all flex items-center justify-center gap-1.5 cursor-pointer text-xs sm:text-sm ${
+            className={`py-1.5 px-3 rounded-md transition-all flex items-center justify-center gap-1.5 cursor-pointer text-xs sm:text-sm ${
               activeTab === "register"
-                ? "bg-card text-foreground shadow-xs font-bold"
+                ? "bg-card text-foreground shadow-xs font-semibold"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -229,15 +229,15 @@ function AuthModalDialog() {
         </div>
 
         {errorMsg && (
-          <div className="mb-4 p-3.5 rounded-2xl bg-destructive/10 border border-destructive/30 text-destructive text-sm flex items-center gap-2.5 font-medium">
-            <AlertCircle className="w-4.5 h-4.5 shrink-0" />
+          <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-sm flex items-center gap-2.5 font-medium">
+            <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{errorMsg}</span>
           </div>
         )}
 
         {successMsg && (
-          <div className="mb-4 p-3.5 rounded-2xl bg-[#e2f6d5] dark:bg-[#1f3016] border border-border text-[#054d28] dark:text-[#cdffad] text-sm flex items-center gap-2.5 font-semibold">
-            <CheckCircle2 className="w-4.5 h-4.5 shrink-0" />
+          <div className="mb-4 p-3 rounded-lg bg-secondary border border-border text-foreground text-sm flex items-center gap-2.5 font-medium">
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
             <span>{successMsg}</span>
           </div>
         )}
@@ -256,7 +256,7 @@ function AuthModalDialog() {
                   value={loginIdentifier}
                   onChange={(e) => setLoginIdentifier(e.target.value)}
                   placeholder="Email atau username Anda"
-                  className="w-full bg-background border border-border rounded-xl py-2.5 pl-10 pr-3.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
+                  className="w-full bg-background border border-border rounded-lg py-2.5 pl-10 pr-3.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
                 />
               </div>
             </div>
@@ -273,7 +273,7 @@ function AuthModalDialog() {
                   value={loginPassword}
                   onChange={(e) => setLoginPassword(e.target.value)}
                   placeholder="Masukkan password Anda"
-                  className="w-full bg-background border border-border rounded-xl py-2.5 pl-10 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
+                  className="w-full bg-background border border-border rounded-lg py-2.5 pl-10 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
                 />
                 <button
                   type="button"
@@ -288,7 +288,7 @@ function AuthModalDialog() {
             <Button
               type="submit"
               disabled={isSubmitting}
-              className="w-full mt-3 h-11 text-sm font-semibold rounded-full shadow-sm cursor-pointer"
+              className="w-full mt-3 h-10 text-sm font-medium rounded-lg shadow-sm cursor-pointer"
             >
               {isSubmitting ? "Sedang Memeriksa..." : "Masuk ke Sistem"}
               <ArrowRight className="w-4 h-4 ml-2" />
@@ -308,7 +308,7 @@ function AuthModalDialog() {
                   value={regName}
                   onChange={(e) => setRegName(e.target.value)}
                   placeholder="Contoh: Budi Pratama"
-                  className="w-full bg-background border border-border rounded-xl py-2.5 pl-10 pr-3.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
+                  className="w-full bg-background border border-border rounded-lg py-2.5 pl-10 pr-3.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
                 />
               </div>
             </div>
@@ -324,7 +324,7 @@ function AuthModalDialog() {
                   value={regUsername}
                   onChange={(e) => setRegUsername(e.target.value.toLowerCase().replace(/\s+/g, ""))}
                   placeholder="budipratama"
-                  className="w-full bg-background border border-border rounded-xl py-2.5 px-3.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors font-mono"
+                  className="w-full bg-background border border-border rounded-lg py-2.5 px-3.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors font-mono"
                 />
               </div>
 
@@ -340,7 +340,7 @@ function AuthModalDialog() {
                     value={regEmail}
                     onChange={(e) => setRegEmail(e.target.value)}
                     placeholder="budi@example.com"
-                    className="w-full bg-background border border-border rounded-xl py-2.5 pl-10 pr-3.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
+                    className="w-full bg-background border border-border rounded-lg py-2.5 pl-10 pr-3.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
                   />
                 </div>
               </div>
@@ -358,7 +358,7 @@ function AuthModalDialog() {
                   value={regPassword}
                   onChange={(e) => setRegPassword(e.target.value)}
                   placeholder="Minimal 6 karakter"
-                  className="w-full bg-background border border-border rounded-xl py-2.5 pl-10 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
+                  className="w-full bg-background border border-border rounded-lg py-2.5 pl-10 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
                 />
                 <button
                   type="button"
@@ -379,7 +379,7 @@ function AuthModalDialog() {
                   value={regPhone}
                   onChange={(e) => setRegPhone(e.target.value)}
                   placeholder="081234567890"
-                  className="w-full bg-background border border-border rounded-xl py-2.5 pl-10 pr-3.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
+                  className="w-full bg-background border border-border rounded-lg py-2.5 pl-10 pr-3.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
                 />
               </div>
             </div>
@@ -393,7 +393,7 @@ function AuthModalDialog() {
                   value={regAddress}
                   onChange={(e) => setRegAddress(e.target.value)}
                   placeholder="Kota / Alamat lengkap domisili"
-                  className="w-full bg-background border border-border rounded-xl py-2.5 pl-10 pr-3.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors resize-none"
+                  className="w-full bg-background border border-border rounded-lg py-2.5 pl-10 pr-3.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors resize-none"
                 />
               </div>
             </div>
@@ -401,7 +401,7 @@ function AuthModalDialog() {
             <Button
               type="submit"
               disabled={isSubmitting}
-              className="w-full mt-2 h-11 text-sm font-semibold rounded-full shadow-sm cursor-pointer"
+              className="w-full mt-2 h-10 text-sm font-medium rounded-lg shadow-sm cursor-pointer"
             >
               {isSubmitting ? "Sedang Mendaftar..." : "Daftar & Masuk ke Platform"}
               <ArrowRight className="w-4 h-4 ml-2" />

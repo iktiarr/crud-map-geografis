@@ -109,7 +109,7 @@ export default function AreaAnalysisPage() {
                         value={newPolyName}
                         onChange={(e) => setNewPolyName(e.target.value)}
                         placeholder="Kecamatan Baru"
-                        className="w-full bg-background border border-border rounded-xl p-2 text-foreground focus:outline-none focus:border-primary"
+                        className="w-full bg-background border border-border rounded-lg p-2 text-foreground focus:outline-none focus:border-primary"
                       />
                     </div>
                     <div>
@@ -119,7 +119,7 @@ export default function AreaAnalysisPage() {
                         value={newPolyArea}
                         onChange={(e) => setNewPolyArea(e.target.value)}
                         placeholder="7.50 km²"
-                        className="w-full bg-background border border-border rounded-xl p-2 text-foreground focus:outline-none focus:border-primary"
+                        className="w-full bg-background border border-border rounded-lg p-2 text-foreground focus:outline-none focus:border-primary"
                       />
                     </div>
                     <div>
@@ -127,7 +127,7 @@ export default function AreaAnalysisPage() {
                       <select
                         value={newPolyDensity}
                         onChange={(e) => setNewPolyDensity(e.target.value)}
-                        className="w-full bg-background border border-border rounded-xl p-2 text-foreground focus:outline-none focus:border-primary"
+                        className="w-full bg-background border border-border rounded-lg p-2 text-foreground focus:outline-none focus:border-primary"
                       >
                         <option value="Sangat Tinggi">Sangat Tinggi</option>
                         <option value="Tinggi">Tinggi</option>
@@ -142,7 +142,7 @@ export default function AreaAnalysisPage() {
                           type="color"
                           value={newPolyColor}
                           onChange={(e) => setNewPolyColor(e.target.value)}
-                          className="w-full h-8 rounded-xl bg-background border border-border cursor-pointer p-0.5"
+                          className="w-full h-8 rounded-lg bg-background border border-border cursor-pointer p-0.5"
                         />
                       </div>
                       <Button type="submit" size="sm" className="h-8">
@@ -157,7 +157,7 @@ export default function AreaAnalysisPage() {
                 {!isLoaded ? (
                   <>
                     {[1, 2, 3, 4].map((i) => (
-                      <div key={i} className="p-4 rounded-2xl border border-border/60 bg-muted/20 space-y-3 animate-pulse">
+                      <div key={i} className="p-4 rounded-lg border border-border/60 bg-muted/20 space-y-3 animate-pulse">
                         <div className="flex justify-between items-center">
                           <Skeleton className="h-5 w-32" />
                           <Skeleton className="w-3 h-3 rounded-full" />
@@ -167,7 +167,7 @@ export default function AreaAnalysisPage() {
                           <Skeleton className="h-3.5 w-3/4" />
                           <Skeleton className="h-3.5 w-1/2" />
                         </div>
-                        <Skeleton className="h-8 w-full rounded-xl" />
+                        <Skeleton className="h-8 w-full rounded-lg" />
                       </div>
                     ))}
                   </>
@@ -186,9 +186,9 @@ export default function AreaAnalysisPage() {
                     return (
                       <div
                         key={dist.id}
-                        className={`p-4 rounded-2xl border transition-all group shadow-xs ${
+                        className={`p-4 rounded-lg border transition-all group shadow-xs ${
                           isSelected
-                            ? "border-primary bg-primary/10 ring-2 ring-primary/30"
+                            ? "border-primary bg-primary/10 ring-1 ring-primary/40"
                             : "border-border bg-card hover:border-primary/50"
                         }`}
                       >
@@ -264,7 +264,7 @@ export default function AreaAnalysisPage() {
                   <select
                     value={selectedDistrict}
                     onChange={(e) => setSelectedDistrict(e.target.value)}
-                    className="w-full bg-background border border-border rounded-xl p-2 text-foreground focus:outline-none focus:border-primary"
+                    className="w-full bg-background border border-border rounded-lg p-2 text-foreground focus:outline-none focus:border-primary"
                   >
                     <option value="Semua Kecamatan">Semua Kecamatan ({areaSurveyPoints.length} Titik Observasi)</option>
                     {areaPolygons.map((p) => (
@@ -275,7 +275,7 @@ export default function AreaAnalysisPage() {
                   </select>
                 </div>
 
-                <div className="p-3 rounded-xl bg-muted/30 border border-border space-y-2">
+                <div className="p-3 rounded-lg bg-muted/30 border border-border space-y-2">
                   <div className="text-[11px] font-medium text-foreground flex items-center justify-between">
                     <span>Hasil Uji Spasial ST_Contains:</span>
                     <Badge variant="secondary" className="text-[10px]">

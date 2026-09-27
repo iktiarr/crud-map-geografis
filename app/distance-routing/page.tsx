@@ -118,12 +118,12 @@ export default function DistanceRoutingPage() {
 
             <CardContent className="p-6 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="p-4 rounded-2xl border border-border bg-card/60 space-y-2.5">
+                <div className="p-4 rounded-lg border border-border bg-card/60 space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-primary flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5" /> Titik Asal (Point A)
+                    <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-primary" /> Titik Asal (Point A)
                     </span>
-                    <Badge variant="outline" className="text-[10px]">
+                    <Badge variant="outline" className="text-[10px] font-mono">
                       Asal
                     </Badge>
                   </div>
@@ -134,7 +134,7 @@ export default function DistanceRoutingPage() {
                     </label>
                     <select
                       onChange={(e) => handleSelectFromMarker(e.target.value)}
-                      className="w-full bg-background border border-border rounded-xl p-1.5 text-xs text-foreground focus:outline-none focus:border-primary"
+                      className="w-full bg-background border border-border rounded-lg p-2 text-xs text-foreground focus:outline-none focus:border-primary"
                     >
                       <option value="">-- Pilih Waypoint Rute --</option>
                       {routingWaypoints.map((m) => (
@@ -151,7 +151,7 @@ export default function DistanceRoutingPage() {
                       type="text"
                       value={fromName}
                       onChange={(e) => setFromName(e.target.value)}
-                      className="w-full bg-background border border-border rounded-xl p-1.5 text-xs text-foreground focus:outline-none focus:border-primary"
+                      className="w-full bg-background border border-border rounded-lg p-2 text-xs text-foreground focus:outline-none focus:border-primary"
                     />
                   </div>
 
@@ -162,7 +162,7 @@ export default function DistanceRoutingPage() {
                         type="text"
                         value={fromLat}
                         onChange={(e) => setFromLat(e.target.value)}
-                        className="w-full bg-background border border-border rounded-xl p-1 text-foreground font-mono text-[11px]"
+                        className="w-full bg-background border border-border rounded-lg p-1.5 text-foreground font-mono text-[11px]"
                       />
                     </div>
                     <div>
@@ -171,18 +171,18 @@ export default function DistanceRoutingPage() {
                         type="text"
                         value={fromLng}
                         onChange={(e) => setFromLng(e.target.value)}
-                        className="w-full bg-background border border-border rounded-xl p-1 text-foreground font-mono text-[11px]"
+                        className="w-full bg-background border border-border rounded-lg p-1.5 text-foreground font-mono text-[11px]"
                       />
                     </div>
                   </div>
                 </div>
 
-                <div className="p-4 rounded-2xl border border-border bg-card/60 space-y-2.5">
+                <div className="p-4 rounded-lg border border-border bg-card/60 space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-primary flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5" /> Titik Tujuan (Point B)
+                    <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-primary" /> Titik Tujuan (Point B)
                     </span>
-                    <Badge variant="outline" className="text-[10px]">
+                    <Badge variant="outline" className="text-[10px] font-mono">
                       Tujuan
                     </Badge>
                   </div>
@@ -193,7 +193,7 @@ export default function DistanceRoutingPage() {
                     </label>
                     <select
                       onChange={(e) => handleSelectToMarker(e.target.value)}
-                      className="w-full bg-background border border-border rounded-xl p-1.5 text-xs text-foreground focus:outline-none focus:border-primary"
+                      className="w-full bg-background border border-border rounded-lg p-2 text-xs text-foreground focus:outline-none focus:border-primary"
                     >
                       <option value="">-- Pilih Waypoint Rute --</option>
                       {routingWaypoints.map((m) => (
@@ -210,7 +210,7 @@ export default function DistanceRoutingPage() {
                       type="text"
                       value={toName}
                       onChange={(e) => setToName(e.target.value)}
-                      className="w-full bg-background border border-border rounded-xl p-1.5 text-xs text-foreground focus:outline-none focus:border-primary"
+                      className="w-full bg-background border border-border rounded-lg p-2 text-xs text-foreground focus:outline-none focus:border-primary"
                     />
                   </div>
 
@@ -221,7 +221,7 @@ export default function DistanceRoutingPage() {
                         type="text"
                         value={toLat}
                         onChange={(e) => setToLat(e.target.value)}
-                        className="w-full bg-background border border-border rounded-xl p-1 text-foreground font-mono text-[11px]"
+                        className="w-full bg-background border border-border rounded-lg p-1.5 text-foreground font-mono text-[11px]"
                       />
                     </div>
                     <div>
@@ -230,17 +230,17 @@ export default function DistanceRoutingPage() {
                         type="text"
                         value={toLng}
                         onChange={(e) => setToLng(e.target.value)}
-                        className="w-full bg-background border border-border rounded-xl p-1 text-foreground font-mono text-[11px]"
+                        className="w-full bg-background border border-border rounded-lg p-1.5 text-foreground font-mono text-[11px]"
                       />
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="p-4 rounded-2xl bg-secondary border border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="p-4 rounded-lg bg-secondary border border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
                   <div className="text-xs text-muted-foreground">Hasil Jarak Garis Lurus (Geodesic Straight Line):</div>
-                  <div className="text-2xl sm:text-3xl font-bold font-mono text-primary mt-0.5">
+                  <div className="text-2xl sm:text-3xl font-bold font-mono text-foreground mt-0.5">
                     {distanceKm.toFixed(2)} km{" "}
                     <span className="text-xs font-normal text-muted-foreground">
                       ({(distanceKm * 1000).toLocaleString()} meter)
@@ -267,21 +267,21 @@ export default function DistanceRoutingPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-4 pt-2 space-y-2 text-xs text-foreground">
-                <div className="flex items-center justify-between p-2 rounded-xl bg-card border border-border">
+                <div className="flex items-center justify-between p-2 rounded-lg bg-card border border-border">
                   <span>Radius 1 km (Jalan Kaki)</span>
-                  <Badge variant="secondary" className="text-[10px]">
+                  <Badge variant="secondary" className="text-[10px] font-mono">
                     ~12 menit
                   </Badge>
                 </div>
-                <div className="flex items-center justify-between p-2 rounded-xl bg-card border border-border">
+                <div className="flex items-center justify-between p-2 rounded-lg bg-card border border-border">
                   <span>Radius 3 km (Sepeda Motor)</span>
-                  <Badge variant="secondary" className="text-[10px]">
+                  <Badge variant="secondary" className="text-[10px] font-mono">
                     ~8 menit
                   </Badge>
                 </div>
-                <div className="flex items-center justify-between p-2 rounded-xl bg-card border border-border">
+                <div className="flex items-center justify-between p-2 rounded-lg bg-card border border-border">
                   <span>Radius 5 km (Mobil / Transit)</span>
-                  <Badge variant="secondary" className="text-[10px]">
+                  <Badge variant="secondary" className="text-[10px] font-mono">
                     ~15 menit
                   </Badge>
                 </div>
@@ -297,7 +297,7 @@ export default function DistanceRoutingPage() {
                 {routeHistory.length > 0 && (
                   <button
                     onClick={clearRouteHistory}
-                    className="text-[10px] text-muted-foreground hover:text-destructive"
+                    className="text-[10px] font-mono text-muted-foreground hover:text-destructive cursor-pointer"
                   >
                     Hapus Semua
                   </button>
@@ -306,8 +306,8 @@ export default function DistanceRoutingPage() {
               <CardContent className="p-4 pt-2 space-y-2 text-xs">
                 {!isLoaded ? (
                   <div className="space-y-2">
-                    <Skeleton className="h-12 w-full rounded-xl" />
-                    <Skeleton className="h-12 w-full rounded-xl" />
+                    <Skeleton className="h-12 w-full rounded-lg" />
+                    <Skeleton className="h-12 w-full rounded-lg" />
                   </div>
                 ) : routeHistory.length === 0 ? (
                   <div className="text-center text-muted-foreground text-xs py-4">
@@ -315,10 +315,10 @@ export default function DistanceRoutingPage() {
                   </div>
                 ) : (
                   routeHistory.slice(0, 4).map((r) => (
-                    <div key={r.id} className="p-2 rounded-xl bg-card border border-border text-[11px] space-y-1">
+                    <div key={r.id} className="p-2 rounded-lg bg-card border border-border text-[11px] space-y-1">
                       <div className="flex items-center justify-between font-medium text-foreground">
                         <span className="truncate max-w-35">{r.fromName} ➔ {r.toName}</span>
-                        <span className="font-mono text-primary font-bold">{r.distanceKm} km</span>
+                        <span className="font-mono text-foreground font-bold">{r.distanceKm} km</span>
                       </div>
                       <div className="text-[10px] text-muted-foreground font-mono">
                         {new Date(r.createdAt).toLocaleTimeString()}

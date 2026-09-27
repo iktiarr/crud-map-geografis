@@ -59,17 +59,17 @@ export default function HeatmapDensityPage() {
 
             <CardContent className="p-4 sm:p-8 min-h-65 sm:min-h-87.5 relative bg-muted/20 flex flex-col items-center justify-center text-center overflow-hidden">
               <div 
-                className="absolute top-1/4 left-1/3 w-40 h-40 bg-primary/20 rounded-full blur-3xl pointer-events-none transition-opacity"
+                className="absolute top-1/4 left-1/3 w-40 h-40 bg-white/10 rounded-full blur-3xl pointer-events-none transition-opacity"
                 style={{ opacity: opacity / 100 }}
               />
               <div 
-                className="absolute bottom-1/3 right-1/4 w-48 h-48 bg-[#ffd11a]/20 rounded-full blur-3xl pointer-events-none transition-opacity"
+                className="absolute bottom-1/3 right-1/4 w-48 h-48 bg-zinc-600/20 rounded-full blur-3xl pointer-events-none transition-opacity"
                 style={{ opacity: opacity / 100 }}
               />
 
               <div className="typeset typeset-notes max-w-[32em] relative z-10 text-center">
-                <div className="not-typeset w-16 h-16 rounded-full bg-secondary border border-border text-primary mx-auto flex items-center justify-center mb-4 shadow-sm animate-bounce">
-                  <Flame className="w-8 h-8" />
+                <div className="not-typeset w-14 h-14 rounded-lg bg-secondary border border-border text-foreground mx-auto flex items-center justify-center mb-4 shadow-sm">
+                  <Flame className="w-7 h-7 text-foreground" />
                 </div>
                 {!isLoaded ? (
                   <div className="space-y-3">
@@ -82,7 +82,7 @@ export default function HeatmapDensityPage() {
                   </div>
                 ) : (
                   <>
-                    <h3 className="font-extrabold text-foreground text-lg mb-2">
+                    <h3 className="font-bold text-foreground text-lg mb-2">
                       {heatmapPoints.length} Titik Hotspot Kepadatan Tinggi
                     </h3>
                     <p className="text-muted-foreground mb-5 text-sm">
@@ -106,7 +106,7 @@ export default function HeatmapDensityPage() {
             <Card className="border-border bg-card backdrop-blur">
               <CardHeader className="p-4 pb-2">
                 <CardTitle className="text-sm font-medium text-foreground flex items-center gap-2">
-                  <Sliders className="w-4 h-4 text-primary" />
+                  <Sliders className="w-4 h-4 text-foreground" />
                   Parameter Heatmap
                 </CardTitle>
               </CardHeader>
@@ -114,7 +114,7 @@ export default function HeatmapDensityPage() {
                 <div>
                   <div className="flex justify-between text-foreground mb-1">
                     <span>Radius Titik (Blur Radius):</span>
-                    <span className="font-mono text-primary font-bold">{radius} px</span>
+                    <span className="font-mono text-foreground font-bold">{radius} px</span>
                   </div>
                   <input
                     type="range"
@@ -129,7 +129,7 @@ export default function HeatmapDensityPage() {
                 <div>
                   <div className="flex justify-between text-foreground mb-1">
                     <span>Opasitas Layer Heatmap:</span>
-                    <span className="font-mono text-primary font-bold">{opacity}%</span>
+                    <span className="font-mono text-foreground font-bold">{opacity}%</span>
                   </div>
                   <input
                     type="range"
@@ -142,8 +142,8 @@ export default function HeatmapDensityPage() {
                 </div>
 
                 <div className="pt-2 border-t border-border">
-                  <span className="text-muted-foreground block mb-2 font-medium">Skema Gradien Warna (Wise Semantic):</span>
-                  <div className="h-4 rounded-full bg-linear-to-r from-[#2ead4b] via-[#ffd11a] to-[#d03238] shadow-inner" />
+                  <span className="text-muted-foreground block mb-2 font-medium font-mono text-[11px]">Skema Gradien Intensitas (Aether Monochrome):</span>
+                  <div className="h-3 rounded-lg bg-linear-to-r from-zinc-800 via-zinc-400 to-white shadow-inner" />
                   <div className="flex justify-between text-[10px] text-muted-foreground mt-1 font-mono">
                     <span>Rendah (0.0)</span>
                     <span>Tinggi (1.0)</span>

@@ -47,7 +47,7 @@ export function BasemapCombobox({ value, onChange, className = "" }: BasemapComb
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-background hover:bg-muted/60 border border-border/80 hover:border-primary/50 text-foreground transition-all shadow-2xs group focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+        className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-background hover:bg-muted/60 border border-border/80 hover:border-primary/50 text-foreground transition-all shadow-2xs group focus:outline-hidden focus:ring-1 focus:ring-primary/30"
         aria-expanded={isOpen}
       >
         <div className="flex items-center gap-2 min-w-0">
@@ -71,12 +71,12 @@ export function BasemapCombobox({ value, onChange, className = "" }: BasemapComb
 
       {/* Dropdown Popover */}
       {isOpen && (
-        <div className="absolute top-full left-0 mt-1.5 w-full z-50 bg-popover/95 backdrop-blur-xl border border-border rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <div className="absolute top-full left-0 mt-1.5 w-full z-50 bg-popover/95 backdrop-blur-xl border border-border rounded-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
           {/* List of Maps Grouped Directly (No Search, Simple & Clean) */}
           <div className="max-h-72 overflow-y-auto p-1.5 space-y-2">
             {/* 1. Google Maps Group */}
             <div>
-              <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+              <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider font-mono">
                 Google Maps ({googleMaps.length})
               </div>
               <div className="space-y-0.5">
@@ -93,7 +93,7 @@ export function BasemapCombobox({ value, onChange, className = "" }: BasemapComb
 
             {/* 2. ESRI ArcGIS Group */}
             <div>
-              <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider pt-1 border-t border-border/50">
+              <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider font-mono pt-1 border-t border-border/50">
                 ESRI ArcGIS ({esriMaps.length})
               </div>
               <div className="space-y-0.5">
@@ -110,7 +110,7 @@ export function BasemapCombobox({ value, onChange, className = "" }: BasemapComb
 
             {/* 3. OpenStreetMap & Relief Group */}
             <div>
-              <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider pt-1 border-t border-border/50">
+              <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider font-mono pt-1 border-t border-border/50">
                 OpenStreetMap & Relief ({otherMaps.length})
               </div>
               <div className="space-y-0.5">
@@ -144,9 +144,9 @@ function BasemapItem({
     <button
       type="button"
       onClick={onSelect}
-      className={`w-full flex items-center justify-between gap-2 p-2 rounded-xl text-left transition-all ${
+      className={`w-full flex items-center justify-between gap-2 p-2 rounded-lg text-left transition-all ${
         isSelected
-          ? "bg-primary/15 text-primary border border-primary/30"
+          ? "bg-primary/10 text-primary border border-primary/30"
           : "hover:bg-muted/70 text-foreground border border-transparent"
       }`}
     >

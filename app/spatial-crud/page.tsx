@@ -16,7 +16,6 @@ import {
   Undo2,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
   Check,
   X,
   Map as MapIcon,
@@ -45,6 +44,17 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Field, FieldLabel, FieldDescription } from "@/components/ui/field";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
 
 // Dynamic import of Leaflet map with SSR disabled
 const LeafletSpatialCrudMap = dynamic(
@@ -87,7 +97,6 @@ const DEFAULT_CATEGORIES = [
   "Lainnya",
 ];
 
-const DEFAULT_GROUPS: string[] = [];
 
 // ================= ACTION MENU COMBOBOX UNTUK GRUP =================
 function GroupActionMenu({
@@ -99,155 +108,99 @@ function GroupActionMenu({
   onRename: (group: string) => void;
   onDelete: (group: string) => void;
 }) {
-  const [isOpen, setIsOpen] = React.useState(false);
-  const [isExportSubmenuOpen, setIsExportSubmenuOpen] = React.useState(false);
-  const menuRef = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-        setIsExportSubmenuOpen(false);
-      }
-    };
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [isOpen]);
-
   const handleExport = (format: string) => {
     const url = `/api/spatial-crud/export?format=${format}&group=${encodeURIComponent(groupName)}`;
     window.open(url, "_blank");
-    setIsOpen(false);
-    setIsExportSubmenuOpen(false);
   };
 
   return (
-    <div className="relative" ref={menuRef} onClick={(e) => e.stopPropagation()}>
-      <button
-        type="button"
-        onClick={() => {
-          setIsOpen((prev) => !prev);
-          setIsExportSubmenuOpen(false);
-        }}
-        className={`p-1.5 rounded-full border transition-all cursor-pointer ${
-          isOpen
-            ? "bg-primary text-primary-foreground border-primary shadow-xs"
-            : "border-border/70 hover:bg-muted text-muted-foreground hover:text-foreground"
-        }`}
-        title={`Menu Aksi Grup ${groupName}`}
-      >
-        <MoreVertical className="w-3.5 h-3.5" />
-      </button>
+    <div onClick={(e) => e.stopPropagation()}>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          className="p-1.5 rounded-full border border-border/70 hover:bg-muted text-muted-foreground hover:text-foreground transition-all cursor-pointer data-popup-open:bg-primary data-popup-open:text-primary-foreground data-popup-open:border-primary shadow-xs outline-none"
+          title={`Menu Aksi Grup ${groupName}`}
+        >
+          <MoreVertical className="w-3.5 h-3.5" />
+        </DropdownMenuTrigger>
 
-      {isOpen && (
-        <div className="absolute right-0 top-full mt-1.5 z-50 min-w-40 bg-popover text-popover-foreground rounded-2xl border border-border shadow-xl p-1.5 space-y-0.5 animate-in fade-in zoom-in-95 duration-150">
+        <DropdownMenuContent align="end" side="bottom" sideOffset={6} className="min-w-44 z-50">
           {/* Ubah Nama */}
-          <button
-            type="button"
-            onClick={() => {
-              setIsOpen(false);
-              onRename(groupName);
-            }}
-            className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-medium hover:bg-muted text-foreground transition-colors cursor-pointer text-left"
+          <DropdownMenuItem
+            onClick={() => onRename(groupName)}
+            className="flex items-center gap-2 cursor-pointer text-xs font-medium"
           >
             <Edit3 className="w-3.5 h-3.5 text-blue-500 shrink-0" />
             <span>Ubah Nama</span>
-          </button>
+          </DropdownMenuItem>
 
-          {/* Ekspor (Submenu trigger) */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setIsExportSubmenuOpen((prev) => !prev)}
-              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs font-medium transition-colors cursor-pointer text-left ${
-                isExportSubmenuOpen ? "bg-muted text-primary" : "hover:bg-muted text-foreground"
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <Download className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                <span>Ekspor</span>
-              </div>
-              <ChevronRight className={`w-3.5 h-3.5 transition-transform ${isExportSubmenuOpen ? "rotate-90 sm:rotate-0" : ""}`} />
-            </button>
+          {/* Ekspor (Submenu) */}
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger className="flex items-center gap-2 cursor-pointer text-xs font-medium">
+              <Download className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+              <span>Ekspor</span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="min-w-50 z-50">
+              <DropdownMenuLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                Format Ekspor Grup:
+              </DropdownMenuLabel>
+              <DropdownMenuItem
+                onClick={() => handleExport("zip")}
+                className="flex items-center gap-2 cursor-pointer text-xs font-medium"
+              >
+                <FolderArchive className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                <span>Paket Lengkap (.zip)</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleExport("shapefile")}
+                className="flex items-center gap-2 cursor-pointer text-xs font-medium"
+              >
+                <MapIcon className="w-3.5 h-3.5 text-primary shrink-0" />
+                <span>Shapefile (.zip)</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleExport("geojson")}
+                className="flex items-center gap-2 cursor-pointer text-xs font-medium"
+              >
+                <FileCode className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                <span>GeoJSON (.geojson)</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleExport("kml")}
+                className="flex items-center gap-2 cursor-pointer text-xs font-medium"
+              >
+                <Globe2 className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                <span>Google Earth (.kml)</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleExport("csv")}
+                className="flex items-center gap-2 cursor-pointer text-xs font-medium"
+              >
+                <FileText className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                <span>Tabel Data (.csv)</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleExport("md")}
+                className="flex items-center gap-2 cursor-pointer text-xs font-medium"
+              >
+                <FileText className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                <span>Dokumen Info (.md)</span>
+              </DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
 
-            {/* Submenu Ekspor */}
-            {isExportSubmenuOpen && (
-              <div className="sm:absolute sm:right-full sm:top-0 sm:mr-1.5 mt-1 sm:mt-0 min-w-50 bg-popover text-popover-foreground rounded-2xl border border-border shadow-2xl p-1.5 space-y-0.5 z-50 animate-in fade-in zoom-in-95 duration-150">
-                <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border/50 mb-1">
-                  Format Ekspor Grup:
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleExport("zip")}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs hover:bg-muted text-foreground transition-colors cursor-pointer text-left font-medium"
-                >
-                  <FolderArchive className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                  <span>Paket Lengkap (.zip)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleExport("shapefile")}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs hover:bg-muted text-foreground transition-colors cursor-pointer text-left font-medium"
-                >
-                  <MapIcon className="w-3.5 h-3.5 text-primary shrink-0" />
-                  <span>Shapefile (.zip)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleExport("geojson")}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs hover:bg-muted text-foreground transition-colors cursor-pointer text-left font-medium"
-                >
-                  <FileCode className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                  <span>GeoJSON (.geojson)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleExport("kml")}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs hover:bg-muted text-foreground transition-colors cursor-pointer text-left font-medium"
-                >
-                  <Globe2 className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                  <span>Google Earth (.kml)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleExport("csv")}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs hover:bg-muted text-foreground transition-colors cursor-pointer text-left font-medium"
-                >
-                  <FileText className="w-3.5 h-3.5 text-orange-500 shrink-0" />
-                  <span>Tabel Data (.csv)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleExport("md")}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs hover:bg-muted text-foreground transition-colors cursor-pointer text-left font-medium"
-                >
-                  <FileText className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                  <span>Dokumen Info (.md)</span>
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="border-t border-border/60 my-1" />
+          <DropdownMenuSeparator />
 
           {/* Hapus Grup */}
-          <button
-            type="button"
-            onClick={() => {
-              setIsOpen(false);
-              onDelete(groupName);
-            }}
-            className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-medium hover:bg-destructive/10 text-destructive transition-colors cursor-pointer text-left"
+          <DropdownMenuItem
+            variant="destructive"
+            onClick={() => onDelete(groupName)}
+            className="flex items-center gap-2 cursor-pointer text-xs font-medium text-destructive focus:text-destructive focus:bg-destructive/10"
           >
             <Trash2 className="w-3.5 h-3.5 shrink-0" />
             <span>Hapus Grup</span>
-          </button>
-        </div>
-      )}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
@@ -256,12 +209,12 @@ export default function SpatialCrudPage() {
   // Data state
   const [features, setFeatures] = React.useState<SpatialFeature[]>([]);
   const [dbGroups, setDbGroups] = React.useState<string[]>([]);
-  const [isLoading, setIsLoading] = React.useState(true);
   const [activeBasemapId, setActiveBasemapId] = React.useState("google-hybrid");
   const [isSidePanelOpen, setIsSidePanelOpen] = React.useState(true);
 
   // Group Management State
   const [activeGroup, setActiveGroup] = React.useState<string>("Semua");
+  const [selectedGroup, setSelectedGroup] = React.useState<string | null>(null);
   const [customGroups, setCustomGroups] = React.useState<string[]>(() => {
     if (typeof window === "undefined") return [];
     try {
@@ -282,17 +235,11 @@ export default function SpatialCrudPage() {
   // Modals for Group Operations
   const [isNewGroupModalOpen, setIsNewGroupModalOpen] = React.useState(false);
   const [newGroupNameInput, setNewGroupNameInput] = React.useState("");
-  const [expandedGroups, setExpandedGroups] = React.useState<Record<string, boolean>>({});
 
-  const toggleGroupExpand = (grp: string) => {
-    setExpandedGroups((prev) => ({ ...prev, [grp]: !prev[grp] }));
-  };
-
-  const handleEnterGroupAddData = (grp: string) => {
-    setEditingFeature(null);
-    setGroupName(grp);
+  const handleOpenGroupDetail = (grp: string) => {
+    setSelectedGroup(grp);
     setActiveGroup(grp);
-    setActiveTab("draw");
+    setGroupName(grp);
   };
 
   // Group Rename & Delete Modals
@@ -331,6 +278,7 @@ export default function SpatialCrudPage() {
         setDbGroups((prev) => prev.map((g) => (g === renameTargetGroup ? trimmed : g)));
         if (activeGroup === renameTargetGroup) setActiveGroup(trimmed);
         if (groupName === renameTargetGroup) setGroupName(trimmed);
+        if (selectedGroup === renameTargetGroup) setSelectedGroup(trimmed);
         setRenameTargetGroup(null);
         fetchFeatures();
       } else {
@@ -368,6 +316,7 @@ export default function SpatialCrudPage() {
         setDbGroups((prev) => prev.filter((g) => g !== grpToDelete));
         if (activeGroup === grpToDelete) setActiveGroup("Semua");
         if (groupName === grpToDelete) setGroupName("");
+        if (selectedGroup === grpToDelete) setSelectedGroup(null);
         setDeleteTargetGroup(null);
         fetchFeatures();
       } else {
@@ -434,7 +383,6 @@ export default function SpatialCrudPage() {
   // Fetch Features from Database
   const fetchFeatures = React.useCallback(async () => {
     try {
-      setIsLoading(true);
       const res = await fetch("/api/spatial-crud");
       const data = await res.json();
       if (data.status === "success" && Array.isArray(data.data)) {
@@ -448,8 +396,6 @@ export default function SpatialCrudPage() {
     } catch (err) {
       console.error("Fetch error:", err);
       showToast("Koneksi gagal saat mengambil data spasial", "error");
-    } finally {
-      setIsLoading(false);
     }
   }, []);
 
@@ -457,14 +403,30 @@ export default function SpatialCrudPage() {
     fetchFeatures();
   }, [fetchFeatures]);
 
-  // Combined list of all available groups
+  // Helper to identify standalone (no group) features
+  const isStandaloneGroup = React.useCallback((grp?: string | null) => {
+    if (!grp) return true;
+    const lower = grp.trim().toLowerCase();
+    return lower === "" || lower === "tanpa grup" || lower === "utama";
+  }, []);
+
+  // Standalone features (without group)
+  const standaloneFeatures = React.useMemo(() => {
+    return features.filter((f) => isStandaloneGroup(f.group_name));
+  }, [features, isStandaloneGroup]);
+
+  // Combined list of all available groups (excluding standalone)
   const allGroups = React.useMemo(() => {
     const fromFeatures = features
-      .map((f) => (f.group_name || "Utama").trim())
-      .filter(Boolean);
-    const combined = new Set([...DEFAULT_GROUPS, ...dbGroups, ...customGroups, ...fromFeatures]);
+      .map((f) => (f.group_name || "").trim())
+      .filter((g) => g && !isStandaloneGroup(g));
+    const combined = new Set([
+      ...dbGroups.filter((g) => g && !isStandaloneGroup(g)),
+      ...customGroups.filter((g) => g && !isStandaloneGroup(g)),
+      ...fromFeatures,
+    ]);
     return Array.from(combined).filter(Boolean);
-  }, [features, dbGroups, customGroups]);
+  }, [features, dbGroups, customGroups, isStandaloneGroup]);
 
   // Helper to add and persist a new custom group
   const handleAddCustomGroup = React.useCallback((newGrp: string) => {
@@ -585,7 +547,7 @@ export default function SpatialCrudPage() {
   const handleStartEdit = (feature: SpatialFeature) => {
     setEditingFeature(feature);
     setName(feature.name || "");
-    setGroupName(feature.group_name || "Utama");
+    setGroupName(isStandaloneGroup(feature.group_name) ? "Tanpa Grup" : (feature.group_name || "Tanpa Grup"));
     setCategory(feature.category || "");
     setColor(feature.color || "#10b981");
     setDescription(feature.description || "");
@@ -600,7 +562,7 @@ export default function SpatialCrudPage() {
   const handleCancelEdit = () => {
     setEditingFeature(null);
     setName("");
-    setGroupName(activeGroup !== "Semua" ? activeGroup : "Utama");
+    setGroupName(selectedGroup && !isStandaloneGroup(selectedGroup) ? selectedGroup : "Tanpa Grup");
     setCustomGroupInForm("");
     setDescription("");
     setColor("#10b981");
@@ -617,8 +579,13 @@ export default function SpatialCrudPage() {
       return;
     }
 
-    const finalGroup = (customGroupInForm.trim() || groupName.trim()) || "Utama";
-    if (customGroupInForm.trim()) {
+    let finalGroup = (customGroupInForm.trim() || groupName.trim()) || "Tanpa Grup";
+    if (finalGroup === "__new__") {
+      finalGroup = customGroupInForm.trim() || "Tanpa Grup";
+    }
+    if (isStandaloneGroup(finalGroup)) {
+      finalGroup = "Tanpa Grup";
+    } else if (customGroupInForm.trim()) {
       handleAddCustomGroup(customGroupInForm.trim());
     }
 
@@ -659,10 +626,19 @@ export default function SpatialCrudPage() {
 
         const data = await res.json();
         if (data.status === "success") {
-          showToast(`Objek "${name}" berhasil diperbarui!`, "success");
+          showToast(
+            isStandaloneGroup(finalGroup)
+              ? `Objek "${name}" diperbarui sebagai data mandiri!`
+              : `Objek "${name}" berhasil diperbarui ke grup "${finalGroup}"!`,
+            "success"
+          );
           handleCancelEdit();
           fetchFeatures();
-          setExpandedGroups((prev) => ({ ...prev, [finalGroup]: true }));
+          if (selectedGroup) {
+            setSelectedGroup(finalGroup);
+          } else {
+            setSelectedGroup(null);
+          }
           setActiveTab("list");
         } else {
           showToast(data.message || "Gagal memperbarui objek", "error");
@@ -693,10 +669,19 @@ export default function SpatialCrudPage() {
 
         const data = await res.json();
         if (data.status === "success") {
-          showToast(`Objek "${name}" disimpan ke grup "${finalGroup}"!`, "success");
+          showToast(
+            isStandaloneGroup(finalGroup)
+              ? `Objek "${name}" berhasil disimpan secara mandiri (tanpa grup)!`
+              : `Objek "${name}" disimpan ke grup "${finalGroup}"!`,
+            "success"
+          );
           handleCancelEdit();
           fetchFeatures();
-          setExpandedGroups((prev) => ({ ...prev, [finalGroup]: true }));
+          if (selectedGroup) {
+            setSelectedGroup(finalGroup);
+          } else {
+            setSelectedGroup(null);
+          }
           setActiveTab("list");
         } else {
           showToast(data.message || "Gagal menyimpan objek", "error");
@@ -843,6 +828,8 @@ export default function SpatialCrudPage() {
     handleAddCustomGroup(trimmed);
     setActiveGroup(trimmed);
     setGroupName(trimmed);
+    setSelectedGroup(null);
+    setActiveTab("list");
     setIsNewGroupModalOpen(false);
     setNewGroupNameInput("");
     showToast(`Grup baru "${trimmed}" berhasil ditambahkan!`, "success");
@@ -920,7 +907,7 @@ export default function SpatialCrudPage() {
       {/* Toast Notification */}
       {toast && (
         <div
-          className={`fixed top-5 right-5 z-50 px-4 py-3 rounded-xl shadow-xl border backdrop-blur-md flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-200 ${
+          className={`fixed top-5 right-5 z-50 px-4 py-3 rounded-lg shadow-xl border backdrop-blur-md flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-200 ${
             toast.type === "success"
               ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
               : "bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400"
@@ -1012,7 +999,16 @@ export default function SpatialCrudPage() {
               </button>
 
               <button
-                onClick={() => setActiveTab("draw")}
+                onClick={() => {
+                  if (!editingFeature) {
+                    if (!selectedGroup || isStandaloneGroup(selectedGroup)) {
+                      setGroupName("Tanpa Grup");
+                    } else {
+                      setGroupName(selectedGroup);
+                    }
+                  }
+                  setActiveTab("draw");
+                }}
                 className={`py-1.5 px-2 rounded-full transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
                   activeTab === "draw"
                     ? "bg-card text-foreground shadow-xs font-bold"
@@ -1047,203 +1043,313 @@ export default function SpatialCrudPage() {
             {/* ================= TAB 1: LIST / DAFTAR GRUP ================= */}
             {activeTab === "list" && (
               <div className="space-y-3">
-                {/* TOMBOL TAMBAH GRUP */}
-                <button
-                  type="button"
-                  onClick={() => setIsNewGroupModalOpen(true)}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-full bg-primary hover:bg-[#cdffad] hover:text-[#0e0f0c] active:scale-[0.99] text-primary-foreground text-xs font-bold transition-all shadow-xs cursor-pointer"
-                  title="Tambah Grup Baru"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Tambah Grup</span>
-                </button>
-
-                {/* DAFTAR GRUP (MUNCUL SEBAGAI LIST) */}
-                {isLoading ? (
-                  <div className="py-12 flex flex-col items-center justify-center text-muted-foreground gap-2">
-                    <RefreshCw className="w-6 h-6 animate-spin text-primary" />
-                    <span className="text-xs">Memuat data dari database PostgreSQL...</span>
-                  </div>
-                ) : allGroups.length === 0 ? (
-                  <div className="py-12 text-center text-muted-foreground bg-card rounded-2xl border border-dashed border-border p-6 space-y-3.5 shadow-2xs">
-                    <div className="w-12 h-12 mx-auto rounded-full bg-secondary text-primary border border-border flex items-center justify-center shadow-xs">
-                      <Folder className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-black text-foreground">Belum ada grup</p>
-                      <p className="text-[11px] mt-1 text-muted-foreground">
-                        Silakan klik tombol &apos;+ Tambah Grup&apos; di atas untuk membuat grup baru.
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => setIsNewGroupModalOpen(true)}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary hover:bg-[#cdffad] hover:text-[#0e0f0c] text-primary-foreground text-xs font-bold transition-all shadow-xs cursor-pointer mx-auto"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>Tambah Grup</span>
-                    </button>
-                  </div>
-                ) : (
+                {selectedGroup ? (
+                  /* ================= DETAIL VIEW UNTUK GRUP YANG DIPILIH ================= */
                   <div className="space-y-3">
-                    {allGroups.map((grp) => {
-                      const groupFeatures = features.filter(
-                        (f) => (f.group_name || "").toLowerCase() === grp.toLowerCase()
-                      );
-                      const count = groupFeatures.length;
-                      const isExpanded = !!expandedGroups[grp];
+                    {/* Header Navigasi Grup */}
+                    <div className="flex items-center justify-between gap-2 pb-2 border-b border-border/80">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedGroup(null)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-secondary text-foreground text-xs font-medium transition-colors cursor-pointer"
+                        title="Kembali ke Daftar Semua Grup"
+                      >
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        <span>Kembali ke Daftar</span>
+                      </button>
+
+                      {!isStandaloneGroup(selectedGroup) && (
+                        <GroupActionMenu
+                          groupName={selectedGroup}
+                          onRename={handleOpenRename}
+                          onDelete={(grp) => {
+                            handleOpenDeleteGroup(grp);
+                          }}
+                        />
+                      )}
+                    </div>
+
+                    {/* Kartu Ringkasan Grup & Tombol Tambah Data */}
+                    <div className="p-3.5 rounded-lg border border-border bg-card flex items-center justify-between gap-3 shadow-2xs">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-lg bg-secondary border border-border text-primary flex items-center justify-center shrink-0 shadow-2xs">
+                          {isStandaloneGroup(selectedGroup) ? (
+                            <Globe2 className="w-4 h-4 text-inherit" />
+                          ) : (
+                            <Folder className="w-4 h-4 text-inherit" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="font-bold text-xs sm:text-sm text-foreground truncate">
+                            {isStandaloneGroup(selectedGroup) ? "Data Mandiri (Tanpa Grup)" : selectedGroup}
+                          </h3>
+                          <p className="text-[11px] text-muted-foreground">
+                            {isStandaloneGroup(selectedGroup)
+                              ? standaloneFeatures.length === 0
+                                ? "Daftar kosong • Belum ada data mandiri"
+                                : `${standaloneFeatures.length} Objek Spasial`
+                              : features.filter((f) => (f.group_name || "").toLowerCase() === selectedGroup.toLowerCase()).length === 0
+                              ? "Daftar kosong • Belum ada data"
+                              : `${features.filter((f) => (f.group_name || "").toLowerCase() === selectedGroup.toLowerCase()).length} Objek Spasial`}
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingFeature(null);
+                          setGroupName(isStandaloneGroup(selectedGroup) ? "Tanpa Grup" : selectedGroup);
+                          setActiveGroup(isStandaloneGroup(selectedGroup) ? "Semua" : selectedGroup);
+                          setActiveTab("draw");
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary hover:opacity-90 text-primary-foreground text-xs font-medium transition-all shadow-xs cursor-pointer shrink-0"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Tambah Data</span>
+                      </button>
+                    </div>
+
+                    {/* Daftar Objek dalam Grup ini */}
+                    {(() => {
+                      const groupFeatures = isStandaloneGroup(selectedGroup)
+                        ? standaloneFeatures
+                        : features.filter(
+                            (f) => (f.group_name || "").toLowerCase() === selectedGroup.toLowerCase()
+                          );
+
+                      if (groupFeatures.length === 0) {
+                        return (
+                          <div className="py-12 text-center text-muted-foreground bg-card rounded-lg border border-dashed border-border p-6 space-y-3.5 shadow-2xs">
+                            <div className="w-12 h-12 mx-auto rounded-lg bg-secondary text-primary border border-border flex items-center justify-center shadow-xs">
+                              {isStandaloneGroup(selectedGroup) ? (
+                                <Globe2 className="w-6 h-6" />
+                              ) : (
+                                <Folder className="w-6 h-6" />
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-foreground">Daftar Kosong</p>
+                              <p className="text-[11px] mt-1 text-muted-foreground max-w-xs mx-auto">
+                                {isStandaloneGroup(selectedGroup)
+                                  ? "Belum ada data spasial mandiri. Silakan klik tombol '+ Tambah Data' di atas untuk membuat data baru tanpa grup."
+                                  : `Belum ada data di grup "${selectedGroup}". Silakan klik tombol '+ Tambah Data' di atas untuk membuat data spasial baru.`}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      }
 
                       return (
-                        <div
-                          key={grp}
-                          onClick={() => handleEnterGroupAddData(grp)}
-                          className="rounded-2xl border border-border bg-card hover:border-primary hover:shadow-md transition-all shadow-2xs overflow-hidden cursor-pointer group"
-                        >
-                          {/* Baris Utama Grup: Ditekan langsung masuk ke halaman tambah data */}
+                        <div className="space-y-2">
+                          <div className="text-[10px] font-semibold text-muted-foreground pb-0.5 flex items-center justify-between">
+                            <span>Objek di grup &quot;{selectedGroup}&quot;:</span>
+                            <span>{groupFeatures.length} objek</span>
+                          </div>
+                          {groupFeatures.map((feat) => {
+                            const isPoint = (feat.type || "").toLowerCase().includes("point");
+                            const isLine = (feat.type || "").toLowerCase().includes("line");
+                            const isSelected = selectedIds.includes(feat.id);
+
+                            return (
+                              <div
+                                key={feat.id}
+                                className={`p-2.5 rounded-lg border transition-all duration-150 bg-card hover:border-primary/40 ${
+                                  isSelected
+                                    ? "border-primary ring-1 ring-primary/40 bg-primary/5"
+                                    : focusedFeatureId === feat.id
+                                    ? "border-primary/80 ring-1 ring-primary/20"
+                                    : "border-border/70"
+                                }`}
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <Checkbox
+                                      checked={isSelected}
+                                      onCheckedChange={() => handleToggleSelect(feat.id)}
+                                      className="shrink-0"
+                                    />
+                                    <span
+                                      className="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs"
+                                      style={{ backgroundColor: feat.color || "#10b981" }}
+                                    />
+                                    <h4 className="font-bold text-xs text-foreground truncate">
+                                      {feat.name}
+                                    </h4>
+                                  </div>
+
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <span
+                                      className={`text-[9px] font-mono font-semibold px-2 py-0.5 rounded-full ${
+                                        isPoint
+                                          ? "bg-red-500/15 text-red-600 dark:text-red-400"
+                                          : isLine
+                                          ? "bg-blue-500/15 text-blue-600 dark:text-blue-400"
+                                          : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                                      }`}
+                                    >
+                                      {feat.type}
+                                    </span>
+
+                                    <button
+                                      onClick={() => setFocusedFeatureId(feat.id)}
+                                      className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-muted hover:bg-primary/15 hover:text-primary transition-colors flex items-center gap-1 cursor-pointer"
+                                      title="Pusatkan di Peta"
+                                    >
+                                      <MapPin className="w-3 h-3" />
+                                      <span>Fokus</span>
+                                    </button>
+
+                                    <button
+                                      onClick={() => handleStartEdit(feat)}
+                                      className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-colors flex items-center gap-1 cursor-pointer"
+                                      title="Edit Objek"
+                                    >
+                                      <Edit3 className="w-3 h-3" />
+                                      <span>Edit</span>
+                                    </button>
+
+                                    <button
+                                      onClick={() => setDeleteTarget(feat)}
+                                      className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 transition-colors flex items-center gap-1 cursor-pointer"
+                                      title="Hapus Objek"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                      <span>Hapus</span>
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {feat.description && (
+                                  <p className="text-[10px] text-muted-foreground mt-1 truncate pl-4.5">
+                                    {feat.description}
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  /* ================= DAFTAR SEMUA GRUP & DATA ================= */
+                  <div className="space-y-3">
+                    {/* TOMBOL AKSI: TAMBAH DATA (MANDIRI/GRUP) & TAMBAH GRUP */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingFeature(null);
+                          setGroupName("Tanpa Grup");
+                          setSelectedGroup(null);
+                          setActiveTab("draw");
+                        }}
+                        className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg bg-primary hover:opacity-90 active:scale-[0.99] text-primary-foreground text-xs font-semibold transition-all shadow-xs cursor-pointer"
+                        title="Tambah Data Spasial Baru Langsung"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Tambah Data</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setIsNewGroupModalOpen(true)}
+                        className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg bg-card hover:bg-secondary border border-border text-foreground text-xs font-semibold transition-all shadow-xs cursor-pointer"
+                        title="Buat Grup Baru"
+                      >
+                        <FolderPlus className="w-4 h-4" />
+                        <span>Tambah Grup</span>
+                      </button>
+                    </div>
+
+                    {/* DAFTAR GRUP & DATA MANDIRI */}
+                    {allGroups.length === 0 && standaloneFeatures.length === 0 ? (
+                      <div className="py-12 text-center text-muted-foreground bg-card rounded-lg border border-dashed border-border p-6 space-y-3.5 shadow-2xs">
+                        <div className="w-12 h-12 mx-auto rounded-lg bg-secondary text-primary border border-border flex items-center justify-center shadow-xs">
+                          <Layers className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-foreground">Belum ada data atau grup</p>
+                          <p className="text-[11px] mt-1 text-muted-foreground max-w-xs mx-auto">
+                            Silakan klik tombol &apos;+ Tambah Data&apos; di atas untuk membuat data mandiri, atau &apos;+ Tambah Grup&apos; untuk membuat grup baru.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2.5">
+                        {/* KARTU DATA MANDIRI / TANPA GRUP */}
+                        {standaloneFeatures.length > 0 && (
                           <div
-                            className="p-3.5 flex items-center justify-between gap-3"
-                            title={`Klik grup "${grp}" untuk langsung masuk ke halaman tambah data`}
+                            onClick={() => handleOpenGroupDetail("Tanpa Grup")}
+                            className="rounded-lg border border-border bg-card hover:border-primary hover:shadow-md transition-all shadow-2xs cursor-pointer group p-3.5 flex items-center justify-between gap-3"
+                            title="Buka daftar objek spasial mandiri (tanpa grup)"
                           >
                             <div className="flex items-center gap-3 min-w-0">
-                              <div className="w-9 h-9 rounded-full bg-secondary border border-border text-primary flex items-center justify-center group-hover:scale-105 group-hover:border-primary group-hover:bg-[#cdffad] group-hover:text-[#0e0f0c] transition-all shrink-0 shadow-2xs">
-                                <Folder className="w-4 h-4 text-inherit" />
+                              <div className="w-9 h-9 rounded-lg bg-secondary border border-border text-primary flex items-center justify-center group-hover:scale-105 group-hover:border-primary group-hover:bg-primary/20 transition-all shrink-0 shadow-2xs">
+                                <Globe2 className="w-4 h-4 text-inherit" />
                               </div>
                               <div className="min-w-0">
-                                <h3 className="font-extrabold text-xs text-foreground group-hover:text-primary transition-colors truncate">
-                                  {grp}
+                                <h3 className="font-semibold text-xs text-foreground group-hover:text-primary transition-colors truncate">
+                                  Data Mandiri (Tanpa Grup)
                                 </h3>
                                 <p className="text-[11px] text-muted-foreground truncate">
-                                  {count === 0 ? "Belum ada data • Tekan untuk tambah" : `${count} Objek Spasial`}
+                                  {standaloneFeatures.length} Objek Spasial
                                 </p>
                               </div>
                             </div>
 
-                            {/* Tombol Aksi di Kanan */}
-                            <div
-                              className="flex items-center gap-1.5 shrink-0"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              {/* Combobox Menu Aksi Grup: Ubah Nama, Ekspor Format GIS, Hapus */}
-                              <GroupActionMenu
-                                groupName={grp}
-                                onRename={handleOpenRename}
-                                onDelete={handleOpenDeleteGroup}
-                              />
-
-                              {/* Tombol Buka/Tutup Daftar Objek jika ada data */}
-                              {count > 0 && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleGroupExpand(grp);
-                                  }}
-                                  className="p-1.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                                  title={isExpanded ? "Tutup daftar objek" : "Lihat objek di grup ini"}
-                                >
-                                  <ChevronDown
-                                    className={`w-4 h-4 transition-transform duration-200 ${
-                                      isExpanded ? "rotate-180 text-primary" : ""
-                                    }`}
-                                  />
-                                </button>
-                              )}
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition-all" />
                             </div>
                           </div>
+                        )}
 
-                          {/* Daftar Objek yang ada di dalam Grup ini (bisa diperluas) */}
-                          {isExpanded && count > 0 && (
-                            <div className="p-3 pt-0 space-y-2 border-t border-border/50 bg-muted/10">
-                              <div className="text-[10px] font-semibold text-muted-foreground pt-2 pb-0.5 flex items-center justify-between">
-                                <span>Objek di grup &quot;{grp}&quot;:</span>
-                                <span>{count} objek</span>
+                        {/* KARTU DAFTAR GRUP PENGGUNA */}
+                        {allGroups.map((grp) => {
+                          const groupFeatures = features.filter(
+                            (f) => (f.group_name || "").toLowerCase() === grp.toLowerCase()
+                          );
+                          const count = groupFeatures.length;
+
+                          return (
+                            <div
+                              key={grp}
+                              onClick={() => handleOpenGroupDetail(grp)}
+                              className="rounded-lg border border-border bg-card hover:border-primary hover:shadow-md transition-all shadow-2xs cursor-pointer group p-3.5 flex items-center justify-between gap-3"
+                              title={`Buka daftar grup "${grp}"`}
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-9 h-9 rounded-lg bg-secondary border border-border text-primary flex items-center justify-center group-hover:scale-105 group-hover:border-primary group-hover:bg-primary/20 transition-all shrink-0 shadow-2xs">
+                                  <Folder className="w-4 h-4 text-inherit" />
+                                </div>
+                                <div className="min-w-0">
+                                  <h3 className="font-semibold text-xs text-foreground group-hover:text-primary transition-colors truncate">
+                                    {grp}
+                                  </h3>
+                                  <p className="text-[11px] text-muted-foreground truncate">
+                                    {count === 0 ? "Belum ada data • Tekan untuk tambah" : `${count} Objek Spasial`}
+                                  </p>
+                                </div>
                               </div>
-                              {groupFeatures.map((feat) => {
-                                const isPoint = (feat.type || "").toLowerCase().includes("point");
-                                const isLine = (feat.type || "").toLowerCase().includes("line");
-                                const isSelected = selectedIds.includes(feat.id);
 
-                                return (
-                                  <div
-                                    key={feat.id}
-                                    className={`p-2.5 rounded-xl border transition-all duration-150 bg-card hover:border-primary/40 ${
-                                      isSelected
-                                        ? "border-primary ring-2 ring-primary/20 bg-primary/5"
-                                        : focusedFeatureId === feat.id
-                                        ? "border-primary/80 ring-1 ring-primary/20"
-                                        : "border-border/70"
-                                    }`}
-                                  >
-                                    <div className="flex items-start justify-between gap-2">
-                                      <div className="flex items-center gap-2 min-w-0">
-                                        <Checkbox
-                                          checked={isSelected}
-                                          onCheckedChange={() => handleToggleSelect(feat.id)}
-                                          className="shrink-0"
-                                        />
-                                        <span
-                                          className="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs"
-                                          style={{ backgroundColor: feat.color || "#10b981" }}
-                                        />
-                                        <h4 className="font-bold text-xs text-foreground truncate">
-                                          {feat.name}
-                                        </h4>
-                                      </div>
-
-                                      <div className="flex items-center gap-1 shrink-0">
-                                        <span
-                                          className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-xl ${
-                                            isPoint
-                                              ? "bg-red-500/15 text-red-600 dark:text-red-400"
-                                              : isLine
-                                              ? "bg-blue-500/15 text-blue-600 dark:text-blue-400"
-                                              : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-                                          }`}
-                                        >
-                                          {feat.type}
-                                        </span>
-
-                                        <button
-                                          onClick={() => setFocusedFeatureId(feat.id)}
-                                          className="px-2 py-0.5 rounded-xl text-[10px] font-semibold bg-muted hover:bg-primary/15 hover:text-primary transition-colors flex items-center gap-1 cursor-pointer"
-                                          title="Pusatkan di Peta"
-                                        >
-                                          <MapPin className="w-3 h-3" />
-                                          <span>Fokus</span>
-                                        </button>
-
-                                        <button
-                                          onClick={() => handleStartEdit(feat)}
-                                          className="px-2 py-0.5 rounded-xl text-[10px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-colors flex items-center gap-1 cursor-pointer"
-                                          title="Edit Objek"
-                                        >
-                                          <Edit3 className="w-3 h-3" />
-                                          <span>Edit</span>
-                                        </button>
-
-                                        <button
-                                          onClick={() => setDeleteTarget(feat)}
-                                          className="px-2 py-0.5 rounded-xl text-[10px] font-semibold bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 transition-colors flex items-center gap-1 cursor-pointer"
-                                          title="Hapus Objek"
-                                        >
-                                          <Trash2 className="w-3 h-3" />
-                                          <span>Hapus</span>
-                                        </button>
-                                      </div>
-                                    </div>
-
-                                    {feat.description && (
-                                      <p className="text-[10px] text-muted-foreground mt-1 truncate pl-4.5">
-                                        {feat.description}
-                                      </p>
-                                    )}
-                                  </div>
-                                );
-                              })}
+                              {/* Tombol Aksi di Kanan */}
+                              <div
+                                className="flex items-center gap-1.5 shrink-0"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <GroupActionMenu
+                                  groupName={grp}
+                                  onRename={handleOpenRename}
+                                  onDelete={handleOpenDeleteGroup}
+                                />
+                                <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition-all" />
+                              </div>
                             </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1253,7 +1359,7 @@ export default function SpatialCrudPage() {
             {activeTab === "draw" && (
               <form onSubmit={handleSubmitForm} className="space-y-3.5">
                 {editingFeature ? (
-                  <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-between">
+                  <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-between">
                     <div>
                       <span className="text-xs font-bold text-blue-600 dark:text-blue-400 block">
                         Sedang Mengedit: {editingFeature.name}
@@ -1265,37 +1371,39 @@ export default function SpatialCrudPage() {
                     <button
                       type="button"
                       onClick={handleCancelEdit}
-                      className="text-xs text-muted-foreground hover:text-foreground font-semibold px-2 py-1 rounded-xl bg-background border border-border cursor-pointer"
+                      className="text-xs text-muted-foreground hover:text-foreground font-semibold px-2 py-1 rounded-md bg-background border border-border cursor-pointer"
                     >
                       Batal
                     </button>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {/* Banner Info Grup yang Sedang Ditambah */}
-                    <div className="p-3 rounded-xl bg-primary/10 border border-primary/25 flex items-center justify-between shadow-2xs">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-8 h-8 rounded-xl bg-primary text-primary-foreground flex items-center justify-center shrink-0 shadow-2xs">
-                          <Folder className="w-4 h-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <span className="text-[10px] uppercase font-bold text-primary tracking-wider block">
-                            Grup Aktif
-                          </span>
-                          <h4 className="text-xs font-bold text-foreground truncate">
-                            {groupName || (allGroups.length > 0 ? allGroups[0] : "Belum Ada Grup")}
-                          </h4>
-                        </div>
-                      </div>
+                    {/* Tombol Navigasi / Status Grup */}
+                    <div className="flex items-center justify-between gap-2 pb-1">
                       <button
                         type="button"
-                        onClick={() => setActiveTab("list")}
-                        className="text-[11px] font-semibold text-primary hover:underline flex items-center gap-1 shrink-0 cursor-pointer"
-                        title="Kembali ke Daftar Grup"
+                        onClick={() => {
+                          handleCancelEdit();
+                          setActiveTab("list");
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-secondary text-foreground text-xs font-medium transition-colors cursor-pointer"
+                        title="Kembali ke Daftar"
                       >
                         <ArrowLeft className="w-3.5 h-3.5" />
-                        <span>Pilih Grup Lain</span>
+                        <span>Kembali ke Daftar</span>
                       </button>
+
+                      <div className="flex items-center gap-1.5">
+                        {isStandaloneGroup(groupName) ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-secondary text-foreground text-[10px] font-medium border border-border">
+                            🌐 Data Mandiri (Tanpa Grup)
+                          </span>
+                        ) : (
+                          <span className="font-mono text-xs text-muted-foreground">
+                            Grup: <strong className="text-foreground font-semibold">{groupName}</strong>
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {/* Tool Selector for Drawing */}
@@ -1313,7 +1421,7 @@ export default function SpatialCrudPage() {
                         <button
                           type="button"
                           onClick={() => handleStartDraw("point")}
-                          className={`p-2.5 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${
+                          className={`p-2.5 rounded-lg border flex flex-col items-center gap-1.5 transition-all ${
                             drawMode === "point"
                               ? "bg-primary text-primary-foreground border-primary shadow-sm"
                               : "bg-background hover:bg-muted/60 border-border text-foreground"
@@ -1327,7 +1435,7 @@ export default function SpatialCrudPage() {
                         <button
                           type="button"
                           onClick={() => handleStartDraw("linestring")}
-                          className={`p-2.5 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${
+                          className={`p-2.5 rounded-lg border flex flex-col items-center gap-1.5 transition-all ${
                             drawMode === "linestring"
                               ? "bg-primary text-primary-foreground border-primary shadow-sm"
                               : "bg-background hover:bg-muted/60 border-border text-foreground"
@@ -1343,7 +1451,7 @@ export default function SpatialCrudPage() {
                         <button
                           type="button"
                           onClick={() => handleStartDraw("polygon")}
-                          className={`p-2.5 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${
+                          className={`p-2.5 rounded-lg border flex flex-col items-center gap-1.5 transition-all ${
                             drawMode === "polygon"
                               ? "bg-primary text-primary-foreground border-primary shadow-sm"
                               : "bg-background hover:bg-muted/60 border-border text-foreground"
@@ -1359,7 +1467,7 @@ export default function SpatialCrudPage() {
 
                       {/* Drawing Instructions Alert */}
                       {drawMode !== "none" && (
-                        <div className="p-3 rounded-xl bg-primary/10 border border-primary/20 text-xs space-y-2">
+                        <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 text-xs space-y-2">
                           <div className="flex items-center justify-between">
                             <strong className="text-primary">
                               {drawMode === "point"
@@ -1378,7 +1486,7 @@ export default function SpatialCrudPage() {
                               <button
                                 type="button"
                                 onClick={handleUndoDraftPoint}
-                                className="px-2.5 py-1 rounded-xl bg-background hover:bg-muted text-[11px] font-semibold flex items-center gap-1 border border-border cursor-pointer"
+                                className="px-2.5 py-1 rounded-md bg-background hover:bg-muted text-[11px] font-semibold flex items-center gap-1 border border-border cursor-pointer"
                               >
                                 <Undo2 className="w-3 h-3" />
                                 Undo Titik
@@ -1386,7 +1494,7 @@ export default function SpatialCrudPage() {
                               <button
                                 type="button"
                                 onClick={resetDrawing}
-                                className="px-2.5 py-1 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-[11px] font-semibold cursor-pointer"
+                                className="px-2.5 py-1 rounded-md bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-[11px] font-semibold cursor-pointer"
                               >
                                 Reset Gambar
                               </button>
@@ -1416,57 +1524,43 @@ export default function SpatialCrudPage() {
                         + Tambah Grup Baru
                       </button>
                     </FieldLabel>
-                    {allGroups.length === 0 ? (
-                      <div className="space-y-1.5">
+                    <div className="space-y-1.5">
+                      <select
+                        value={isStandaloneGroup(groupName) ? "Tanpa Grup" : groupName}
+                        onChange={(e) => {
+                          setGroupName(e.target.value);
+                          if (e.target.value !== "__new__") {
+                            setCustomGroupInForm("");
+                          }
+                        }}
+                        className="w-full px-3 py-2 bg-background rounded-lg border border-border text-xs focus:outline-hidden focus:ring-1 focus:ring-primary/40 font-medium cursor-pointer"
+                      >
+                        <option value="Tanpa Grup">🌐 Tanpa Grup (Data Mandiri / Sendiri)</option>
+                        {allGroups.map((g) => (
+                          <option key={g} value={g}>
+                            📁 Grup: {g}
+                          </option>
+                        ))}
+                        <option value="__new__">+ Buat Nama Grup Baru...</option>
+                      </select>
+
+                      {groupName === "__new__" && (
                         <input
                           type="text"
                           required
                           placeholder="Ketik nama grup baru..."
-                          value={customGroupInForm || groupName}
-                          onChange={(e) => {
-                            setCustomGroupInForm(e.target.value);
-                            setGroupName(e.target.value);
-                          }}
-                          className="w-full px-3 py-2 bg-background rounded-xl border border-primary/50 text-xs focus:outline-hidden focus:ring-2 focus:ring-primary/40 font-semibold text-primary"
+                          value={customGroupInForm}
+                          onChange={(e) => setCustomGroupInForm(e.target.value)}
+                          className="w-full px-3 py-2 bg-background rounded-lg border border-primary/50 text-xs focus:outline-hidden focus:ring-1 focus:ring-primary/40 font-semibold text-primary animate-in fade-in-0 duration-150"
                         />
-                        <p className="text-[10px] text-muted-foreground">
-                          Grup akan otomatis dibuat dan tersimpan bersama objek ini.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="space-y-1.5">
-                        <select
-                          value={groupName || allGroups[0]}
-                          onChange={(e) => {
-                            setGroupName(e.target.value);
-                            if (e.target.value !== "__new__") {
-                              setCustomGroupInForm("");
-                            }
-                          }}
-                          className="w-full px-3 py-2 bg-background rounded-xl border border-border text-xs focus:outline-hidden focus:ring-2 focus:ring-primary/40 font-medium cursor-pointer"
-                        >
-                          {allGroups.map((g) => (
-                            <option key={g} value={g}>
-                              📁 Grup: {g}
-                            </option>
-                          ))}
-                          <option value="__new__">+ Buat Nama Grup Baru...</option>
-                        </select>
-
-                        {groupName === "__new__" && (
-                          <input
-                            type="text"
-                            required
-                            placeholder="Ketik nama grup baru..."
-                            value={customGroupInForm}
-                            onChange={(e) => setCustomGroupInForm(e.target.value)}
-                            className="w-full px-3 py-2 bg-background rounded-xl border border-primary/50 text-xs focus:outline-hidden focus:ring-2 focus:ring-primary/40 font-semibold text-primary animate-in fade-in-0 duration-150"
-                          />
-                        )}
-                      </div>
-                    )}
+                      )}
+                    </div>
                     <FieldDescription className="text-[10px] text-muted-foreground">
-                      Data baru akan masuk ke grup ini agar terkelola dengan rapi.
+                      {isStandaloneGroup(groupName)
+                        ? "Objek ini akan disimpan secara mandiri tanpa grup."
+                        : groupName === "__new__"
+                        ? "Grup baru akan dibuat dan objek ini langsung masuk ke dalamnya."
+                        : `Objek ini akan masuk ke dalam grup "${groupName}".`}
                     </FieldDescription>
                   </Field>
 
@@ -1481,7 +1575,7 @@ export default function SpatialCrudPage() {
                       placeholder="Contoh: Titik Pantau A / Koridor 1"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="w-full px-3 py-2 bg-background rounded-xl border border-border text-xs focus:outline-hidden focus:ring-2 focus:ring-primary/40 transition-all font-medium"
+                      className="w-full px-3 py-2 bg-background rounded-lg border border-border text-xs focus:outline-hidden focus:ring-1 focus:ring-primary/40 transition-all font-medium"
                     />
                   </div>
 
@@ -1534,7 +1628,7 @@ export default function SpatialCrudPage() {
                         type="color"
                         value={color}
                         onChange={(e) => setColor(e.target.value)}
-                        className="w-7 h-7 rounded-xl border border-border p-0.5 cursor-pointer bg-transparent"
+                        className="w-7 h-7 rounded-lg border border-border p-0.5 cursor-pointer bg-transparent"
                         title="Pilih warna bebas"
                       />
                     </div>
@@ -1550,7 +1644,7 @@ export default function SpatialCrudPage() {
                       placeholder="Informasi detail, fasilitas, atau keterangan..."
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
-                      className="w-full px-3 py-2 bg-background rounded-xl border border-border text-xs focus:outline-hidden focus:ring-2 focus:ring-primary/40 transition-all"
+                      className="w-full px-3 py-2 bg-background rounded-lg border border-border text-xs focus:outline-hidden focus:ring-1 focus:ring-primary/40 transition-all"
                     />
                   </div>
 
@@ -1559,7 +1653,7 @@ export default function SpatialCrudPage() {
                     <Button
                       type="submit"
                       disabled={isSubmitting || (!editingFeature && !draftGeometry)}
-                      className="w-full rounded-xl text-xs font-bold py-2.5 shadow-md flex items-center justify-center gap-2"
+                      className="w-full rounded-lg text-xs font-medium py-2.5 shadow-md flex items-center justify-center gap-2"
                     >
                       {isSubmitting ? (
                         <>
@@ -1593,7 +1687,7 @@ export default function SpatialCrudPage() {
                     Unggah berkas <strong>ESRI Shapefile (.zip)</strong> atau <strong>GeoJSON (.geojson / .json)</strong>.
                   </p>
 
-                  <div className="p-4 border-2 border-dashed border-border/80 rounded-xl bg-background/50 hover:bg-muted/30 transition-all text-center relative group">
+                  <div className="p-4 border-2 border-dashed border-border/80 rounded-lg bg-background/50 hover:bg-muted/30 transition-all text-center relative group">
                     <input
                       type="file"
                       accept=".zip,.geojson,.json"
@@ -1615,7 +1709,7 @@ export default function SpatialCrudPage() {
                   </div>
 
                   {uploadProgress && (
-                    <div className="p-3 rounded-xl bg-primary/10 text-primary border border-primary/20 text-xs flex items-center gap-2 animate-pulse">
+                    <div className="p-3 rounded-lg bg-primary/10 text-primary border border-primary/20 text-xs flex items-center gap-2 animate-pulse">
                       <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
                       <span>{uploadProgress}</span>
                     </div>
@@ -1629,13 +1723,13 @@ export default function SpatialCrudPage() {
                       <Download className="w-4 h-4 text-primary" />
                       <span>Unduh & Ekspor Data Spasial</span>
                     </h3>
-                    <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                    <span className="text-[10px] font-mono font-semibold text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
                       Termasuk File .md
                     </span>
                   </div>
 
                   {/* PROMINENT CARD: Active Group Package Export */}
-                  <div className="p-3.5 rounded-xl bg-linear-to-br from-primary/10 via-primary/5 to-background border border-primary/30 shadow-sm space-y-2.5">
+                  <div className="p-3.5 rounded-lg bg-linear-to-br from-primary/10 via-primary/5 to-background border border-primary/30 shadow-sm space-y-2.5">
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
@@ -1658,7 +1752,7 @@ export default function SpatialCrudPage() {
                           activeGroup !== "Semua" ? `&group=${encodeURIComponent(activeGroup)}` : ""
                         }`}
                         download={`${activeGroup.toLowerCase()}_lengkap.zip`}
-                        className="py-2 px-3 rounded-xl bg-primary text-primary-foreground text-xs font-bold shadow-xs hover:opacity-95 transition-all flex items-center justify-center gap-1.5"
+                        className="py-2 px-3 rounded-lg bg-primary text-primary-foreground text-xs font-medium shadow-xs hover:opacity-90 transition-all flex items-center justify-center gap-1.5"
                       >
                         <Download className="w-3.5 h-3.5" />
                         <span>Unduh .ZIP + .MD</span>
@@ -1667,7 +1761,7 @@ export default function SpatialCrudPage() {
                       <button
                         type="button"
                         onClick={handleOpenMdPreview}
-                        className="py-2 px-3 rounded-xl bg-background hover:bg-muted text-foreground border border-border text-xs font-semibold shadow-2xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                        className="py-2 px-3 rounded-lg bg-background hover:bg-muted text-foreground border border-border text-xs font-medium shadow-2xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                       >
                         <Eye className="w-3.5 h-3.5 text-primary" />
                         <span>Lihat File .MD</span>
@@ -1687,10 +1781,10 @@ export default function SpatialCrudPage() {
                         activeGroup !== "Semua" ? `&group=${encodeURIComponent(activeGroup)}` : ""
                       }`}
                       download="shapefile_layers.zip"
-                      className="flex items-center justify-between p-2.5 rounded-xl bg-background border border-border hover:border-primary/50 hover:bg-muted/40 transition-all group"
+                      className="flex items-center justify-between p-2.5 rounded-lg bg-background border border-border hover:border-primary/50 hover:bg-muted/40 transition-all group"
                     >
                       <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                        <div className="w-7 h-7 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
                           <FolderArchive className="w-3.5 h-3.5" />
                         </div>
                         <div>
@@ -1711,10 +1805,10 @@ export default function SpatialCrudPage() {
                         activeGroup !== "Semua" ? `&group=${encodeURIComponent(activeGroup)}` : ""
                       }`}
                       download="data.geojson"
-                      className="flex items-center justify-between p-2.5 rounded-xl bg-background border border-border hover:border-primary/50 hover:bg-muted/40 transition-all group"
+                      className="flex items-center justify-between p-2.5 rounded-lg bg-background border border-border hover:border-primary/50 hover:bg-muted/40 transition-all group"
                     >
                       <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                        <div className="w-7 h-7 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
                           <FileCode className="w-3.5 h-3.5" />
                         </div>
                         <div>
@@ -1735,10 +1829,10 @@ export default function SpatialCrudPage() {
                         activeGroup !== "Semua" ? `&group=${encodeURIComponent(activeGroup)}` : ""
                       }`}
                       download="data.kml"
-                      className="flex items-center justify-between p-2.5 rounded-xl bg-background border border-border hover:border-primary/50 hover:bg-muted/40 transition-all group"
+                      className="flex items-center justify-between p-2.5 rounded-lg bg-background border border-border hover:border-primary/50 hover:bg-muted/40 transition-all group"
                     >
                       <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                        <div className="w-7 h-7 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
                           <Globe2 className="w-3.5 h-3.5" />
                         </div>
                         <div>
@@ -1759,10 +1853,10 @@ export default function SpatialCrudPage() {
                         activeGroup !== "Semua" ? `&group=${encodeURIComponent(activeGroup)}` : ""
                       }`}
                       download="INFORMASI_DATA_SPASIAL.md"
-                      className="flex items-center justify-between p-2.5 rounded-xl bg-background border border-border hover:border-primary/50 hover:bg-muted/40 transition-all group"
+                      className="flex items-center justify-between p-2.5 rounded-lg bg-background border border-border hover:border-primary/50 hover:bg-muted/40 transition-all group"
                     >
                       <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                        <div className="w-7 h-7 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
                           <FileText className="w-3.5 h-3.5" />
                         </div>
                         <div>
@@ -1787,7 +1881,7 @@ export default function SpatialCrudPage() {
         {!isSidePanelOpen && (
           <button
             onClick={() => setIsSidePanelOpen(true)}
-            className="absolute top-4 left-4 z-30 p-2.5 rounded-xl bg-card/90 backdrop-blur-md border border-border shadow-lg text-foreground hover:bg-muted transition-all flex items-center gap-2 font-semibold text-xs cursor-pointer"
+            className="absolute top-4 left-4 z-30 p-2.5 rounded-lg bg-card/90 backdrop-blur-md border border-border shadow-lg text-foreground hover:bg-muted transition-all flex items-center gap-2 font-semibold text-xs cursor-pointer"
             title="Buka Panel Samping"
           >
             <ChevronRight className="w-4 h-4 text-primary" />
@@ -1817,7 +1911,7 @@ export default function SpatialCrudPage() {
 
           {/* Floating Live Drawing Action Bar (when drawing is active) */}
           {drawMode !== "none" && (
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 bg-card/95 backdrop-blur-md px-4 py-2.5 rounded-xl border border-primary/40 shadow-2xl animate-in slide-in-from-bottom-3 duration-200">
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 bg-card/95 backdrop-blur-md px-4 py-2.5 rounded-lg border border-primary/40 shadow-2xl animate-in slide-in-from-bottom-3 duration-200">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
               <div className="text-xs">
                 <span className="font-bold text-foreground">
@@ -1837,7 +1931,7 @@ export default function SpatialCrudPage() {
                 {draftPoints.length > 0 && (
                   <button
                     onClick={handleUndoDraftPoint}
-                    className="px-2.5 py-1 rounded-xl text-xs font-medium bg-muted hover:bg-muted/80 text-foreground flex items-center gap-1 cursor-pointer"
+                    className="px-2.5 py-1 rounded-md text-xs font-medium bg-muted hover:bg-muted/80 text-foreground flex items-center gap-1 cursor-pointer"
                   >
                     <Undo2 className="w-3 h-3" />
                     Undo
@@ -1845,7 +1939,7 @@ export default function SpatialCrudPage() {
                 )}
                 <button
                   onClick={resetDrawing}
-                  className="px-2.5 py-1 rounded-xl text-xs font-medium bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 cursor-pointer"
+                  className="px-2.5 py-1 rounded-md text-xs font-medium bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 cursor-pointer"
                 >
                   Batal
                 </button>
@@ -1855,7 +1949,7 @@ export default function SpatialCrudPage() {
                       if (!isSidePanelOpen) setIsSidePanelOpen(true);
                       setActiveTab("draw");
                     }}
-                    className="px-3 py-1 rounded-xl text-xs font-bold bg-primary text-primary-foreground hover:opacity-90 shadow-xs cursor-pointer"
+                    className="px-3 py-1 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 shadow-xs cursor-pointer"
                   >
                     Selesai & Simpan ➔
                   </button>
@@ -1866,7 +1960,7 @@ export default function SpatialCrudPage() {
 
           {/* ================= FLOATING BATCH ACTION BAR (FITUR SELECT) ================= */}
           {selectedIds.length > 0 && (
-            <div className="absolute top-5 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2.5 bg-card/95 backdrop-blur-md px-4 py-2.5 rounded-xl border border-primary/50 shadow-2xl animate-in slide-in-from-top-3 duration-200">
+            <div className="absolute top-5 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2.5 bg-card/95 backdrop-blur-md px-4 py-2.5 rounded-lg border border-border shadow-2xl animate-in slide-in-from-top-3 duration-200">
               <div className="flex items-center gap-2 pr-2 border-r border-border/80">
                 <span className="w-2.5 h-2.5 rounded-full bg-primary" />
                 <span className="text-xs font-bold text-foreground">
@@ -1881,7 +1975,7 @@ export default function SpatialCrudPage() {
                   setRegroupCustomInput("");
                   setIsRegroupModalOpen(true);
                 }}
-                className="px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold shadow-xs hover:opacity-90 transition-all flex items-center gap-1.5 cursor-pointer"
+                className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium shadow-xs hover:opacity-90 transition-all flex items-center gap-1.5 cursor-pointer"
                 title="Gabungkan data yang lupa digrup menjadi 1"
               >
                 <Folder className="w-3.5 h-3.5" />
@@ -1892,7 +1986,7 @@ export default function SpatialCrudPage() {
               <a
                 href={`/api/spatial-crud/export?format=zip&ids=${selectedIds.join(",")}`}
                 download="ekspor_terpilih_lengkap.zip"
-                className="px-3 py-1.5 rounded-xl bg-background hover:bg-muted text-foreground border border-border text-xs font-semibold shadow-2xs transition-all flex items-center gap-1.5"
+                className="px-3 py-1.5 rounded-md bg-background hover:bg-muted text-foreground border border-border text-xs font-medium shadow-2xs transition-all flex items-center gap-1.5"
                 title="Ekspor item terpilih lengkap dengan file .md"
               >
                 <Download className="w-3.5 h-3.5 text-primary" />
@@ -1902,7 +1996,7 @@ export default function SpatialCrudPage() {
               {/* Action 3: Hapus Terpilih */}
               <button
                 onClick={() => setIsBatchDeleteModalOpen(true)}
-                className="px-2.5 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer"
+                className="px-2.5 py-1.5 rounded-md bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-xs font-medium transition-all flex items-center gap-1 cursor-pointer"
                 title="Hapus massal item terpilih"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -1912,7 +2006,7 @@ export default function SpatialCrudPage() {
               {/* Action 4: Batalkan Seleksi */}
               <button
                 onClick={() => setSelectedIds([])}
-                className="p-1 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
                 title="Batalkan Pilihan"
               >
                 <X className="w-4 h-4" />
@@ -1945,7 +2039,7 @@ export default function SpatialCrudPage() {
                 placeholder="Contoh: Titik Survey 1 / Batas Desa"
                 value={newGroupNameInput}
                 onChange={(e) => setNewGroupNameInput(e.target.value)}
-                className="w-full px-3 py-2 bg-background rounded-xl border border-border text-xs focus:outline-hidden focus:ring-2 focus:ring-primary/40 font-medium"
+                className="w-full px-3 py-2 bg-background rounded-lg border border-border text-xs focus:outline-hidden focus:ring-1 focus:ring-primary/40 font-medium"
               />
             </Field>
 
@@ -1958,7 +2052,7 @@ export default function SpatialCrudPage() {
               >
                 Batal
               </Button>
-              <Button type="submit" size="sm" className="font-bold">
+              <Button type="submit" size="sm" className="font-medium">
                 Simpan Grup
               </Button>
             </DialogFooter>
@@ -1988,8 +2082,9 @@ export default function SpatialCrudPage() {
                   setRegroupTargetGroup(e.target.value);
                   if (e.target.value !== "__new__") setRegroupCustomInput("");
                 }}
-                className="w-full px-3 py-2 bg-background rounded-xl border border-border text-xs focus:outline-hidden focus:ring-2 focus:ring-primary/40 font-medium"
+                className="w-full px-3 py-2 bg-background rounded-lg border border-border text-xs focus:outline-hidden focus:ring-1 focus:ring-primary/40 font-medium"
               >
+                <option value="Tanpa Grup">🌐 Tanpa Grup (Mandiri)</option>
                 {allGroups.map((g) => (
                   <option key={g} value={g}>
                     📁 {g}
@@ -2008,7 +2103,7 @@ export default function SpatialCrudPage() {
                   placeholder="Ketik nama grup baru..."
                   value={regroupCustomInput}
                   onChange={(e) => setRegroupCustomInput(e.target.value)}
-                  className="w-full px-3 py-2 bg-background rounded-xl border border-primary/50 text-xs focus:outline-hidden focus:ring-2 focus:ring-primary/40 font-semibold text-primary"
+                  className="w-full px-3 py-2 bg-background rounded-lg border border-primary/50 text-xs focus:outline-hidden focus:ring-1 focus:ring-primary/40 font-semibold text-primary"
                 />
               </Field>
             )}
@@ -2053,17 +2148,36 @@ export default function SpatialCrudPage() {
             </DialogTitle>
             <DialogDescription>
               Pilih grup tujuan untuk objek ini (saat ini di grup:{" "}
-              <strong>{singleMoveTarget?.group_name || "Utama"}</strong>):
+              <strong>{isStandaloneGroup(singleMoveTarget?.group_name) ? "Tanpa Grup (Mandiri)" : singleMoveTarget?.group_name}</strong>):
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-2 py-1 max-h-60 overflow-y-auto">
+            <button
+              onClick={() => handleConfirmSingleMove("Tanpa Grup")}
+              className={`w-full flex items-center justify-between p-2.5 rounded-lg border text-xs font-semibold transition-all ${
+                isStandaloneGroup(singleMoveTarget?.group_name)
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border hover:bg-muted text-foreground"
+              }`}
+            >
+              <div className="flex items-center gap-2 truncate">
+                <Globe2 className="w-4 h-4 text-primary" />
+                <span>Tanpa Grup (Mandiri)</span>
+              </div>
+              {isStandaloneGroup(singleMoveTarget?.group_name) && (
+                <span className="font-mono text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/20">
+                  Status Sekarang
+                </span>
+              )}
+            </button>
+
             {allGroups.map((grp) => (
               <button
                 key={grp}
                 onClick={() => handleConfirmSingleMove(grp)}
-                className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-xs font-semibold transition-all ${
-                  (singleMoveTarget?.group_name || "Utama") === grp
+                className={`w-full flex items-center justify-between p-2.5 rounded-lg border text-xs font-semibold transition-all ${
+                  singleMoveTarget?.group_name === grp
                     ? "border-primary bg-primary/10 text-primary"
                     : "border-border hover:bg-muted text-foreground"
                 }`}
@@ -2072,8 +2186,8 @@ export default function SpatialCrudPage() {
                   <Folder className="w-4 h-4 text-primary" />
                   <span>{grp}</span>
                 </div>
-                {(singleMoveTarget?.group_name || "Utama") === grp && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-primary/20">
+                {singleMoveTarget?.group_name === grp && (
+                  <span className="font-mono text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/20">
                     Grup Sekarang
                   </span>
                 )}
@@ -2103,7 +2217,7 @@ export default function SpatialCrudPage() {
                   activeGroup !== "Semua" ? `&group=${encodeURIComponent(activeGroup)}` : ""
                 }`}
                 download="INFORMASI_DATA_SPASIAL.md"
-                className="text-xs font-bold px-3 py-1.5 rounded-xl bg-primary text-primary-foreground flex items-center gap-1.5 shadow-xs hover:opacity-90"
+                className="text-xs font-medium px-3 py-1.5 rounded-lg bg-primary text-primary-foreground flex items-center gap-1.5 shadow-xs hover:opacity-90"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>Unduh File .MD</span>
@@ -2114,7 +2228,7 @@ export default function SpatialCrudPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto p-4 rounded-xl bg-muted/40 border border-border text-xs font-mono whitespace-pre-wrap leading-relaxed">
+          <div className="flex-1 overflow-y-auto p-4 rounded-lg bg-muted/40 border border-border text-xs font-mono whitespace-pre-wrap leading-relaxed">
             {isLoadingMdPreview ? (
               <div className="py-12 flex flex-col items-center justify-center text-muted-foreground gap-2">
                 <RefreshCw className="w-6 h-6 animate-spin text-primary" />
@@ -2163,7 +2277,7 @@ export default function SpatialCrudPage() {
 
       {/* ================= MODAL: UBAH NAMA GRUP ================= */}
       <Dialog open={!!renameTargetGroup} onOpenChange={(open) => !open && setRenameTargetGroup(null)}>
-        <DialogContent className="max-w-md rounded-xl">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Edit3 className="w-5 h-5 text-primary" />
@@ -2182,7 +2296,7 @@ export default function SpatialCrudPage() {
                 value={renameNewNameInput}
                 onChange={(e) => setRenameNewNameInput(e.target.value)}
                 placeholder="Masukkan nama baru grup..."
-                className="w-full px-3 py-2 rounded-xl border border-border bg-background text-foreground text-xs focus:ring-2 focus:ring-primary focus:outline-hidden"
+                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground text-xs focus:ring-1 focus:ring-primary/40 focus:outline-hidden"
                 autoFocus
               />
             </Field>
@@ -2192,7 +2306,7 @@ export default function SpatialCrudPage() {
                 type="button"
                 variant="outline"
                 size="sm"
-                className="rounded-xl"
+                className="rounded-lg"
                 onClick={() => setRenameTargetGroup(null)}
               >
                 Batal
@@ -2200,7 +2314,7 @@ export default function SpatialCrudPage() {
               <Button
                 type="submit"
                 size="sm"
-                className="rounded-xl font-bold"
+                className="rounded-lg font-medium"
                 disabled={!renameNewNameInput.trim() || renameNewNameInput.trim() === renameTargetGroup}
               >
                 Simpan Perubahan

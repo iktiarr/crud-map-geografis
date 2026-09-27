@@ -66,7 +66,7 @@ export function CategoryCombobox({
       {/* Trigger Button */}
       <div
         onClick={() => setIsOpen((prev) => !prev)}
-        className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-background hover:bg-muted/50 border border-border rounded-xl text-xs text-foreground transition-all shadow-2xs group cursor-pointer select-none focus-within:ring-2 focus-within:ring-primary/30"
+        className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-background hover:bg-muted/50 border border-border rounded-lg text-xs text-foreground transition-all shadow-2xs group cursor-pointer select-none focus-within:ring-1 focus-within:ring-primary/40"
         role="button"
         tabIndex={0}
         onKeyDown={(e) => {
@@ -89,7 +89,7 @@ export function CategoryCombobox({
             <button
               type="button"
               onClick={handleClear}
-              className="p-0.5 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              className="p-0.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
               title="Kosongkan kategori"
             >
               <X className="w-3.5 h-3.5" />
@@ -105,7 +105,7 @@ export function CategoryCombobox({
 
       {/* Popover Content */}
       {isOpen && (
-        <div className="absolute top-full left-0 mt-1.5 w-full z-50 bg-popover/95 backdrop-blur-xl border border-border rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <div className="absolute top-full left-0 mt-1.5 w-full z-50 bg-popover/95 backdrop-blur-xl border border-border rounded-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
           {/* Search / Custom Input */}
           <div className="p-2 border-b border-border/80 bg-muted/30">
             <div className="relative">
@@ -122,7 +122,7 @@ export function CategoryCombobox({
                     handleSelect(search.trim());
                   }
                 }}
-                className="w-full pl-8 pr-7 py-1.5 bg-background rounded-xl border border-border/80 text-xs focus:outline-hidden focus:ring-1 focus:ring-primary/50 placeholder:text-muted-foreground"
+                className="w-full pl-8 pr-7 py-1.5 bg-background rounded-lg border border-border/80 text-xs focus:outline-hidden focus:ring-1 focus:ring-primary/50 placeholder:text-muted-foreground"
               />
               {search && (
                 <button
@@ -143,7 +143,7 @@ export function CategoryCombobox({
               <button
                 type="button"
                 onClick={() => handleSelect(search.trim())}
-                className="w-full flex items-center gap-2 p-2 rounded-xl text-left text-xs font-semibold text-primary bg-primary/10 hover:bg-primary/20 transition-colors border border-dashed border-primary/40 mb-1"
+                className="w-full flex items-center gap-2 p-2 rounded-lg text-left text-xs font-semibold text-primary bg-primary/10 hover:bg-primary/20 transition-colors border border-dashed border-primary/40 mb-1"
               >
                 <Plus className="w-3.5 h-3.5 shrink-0" />
                 <span className="truncate">
@@ -157,7 +157,7 @@ export function CategoryCombobox({
               <button
                 type="button"
                 onClick={() => handleSelect("")}
-                className="w-full flex items-center gap-2 p-2 rounded-xl text-left text-xs text-muted-foreground hover:bg-muted/70 transition-colors border border-dashed border-border/60 mb-1"
+                className="w-full flex items-center gap-2 p-2 rounded-lg text-left text-xs text-muted-foreground hover:bg-muted/70 transition-colors border border-dashed border-border/60 mb-1"
               >
                 <X className="w-3.5 h-3.5 shrink-0 text-red-500" />
                 <span>Tanpa Kategori (Kosongkan)</span>
@@ -171,7 +171,7 @@ export function CategoryCombobox({
                   key={cat}
                   type="button"
                   onClick={() => handleSelect(cat)}
-                  className={`w-full flex items-center justify-between p-2 rounded-xl text-left text-xs transition-all ${
+                  className={`w-full flex items-center justify-between p-2 rounded-lg text-left text-xs transition-all ${
                     isSelected
                       ? "bg-primary/15 text-primary font-bold border border-primary/30"
                       : "hover:bg-muted/70 text-foreground font-medium border border-transparent"

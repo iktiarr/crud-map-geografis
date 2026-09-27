@@ -24,7 +24,7 @@ const LeafletGlobalMap = dynamic(
     loading: () => (
       <div className="w-full h-full bg-muted/20 flex flex-col items-center justify-center p-6">
         <div className="flex flex-col items-center max-w-xs w-full space-y-3 text-center">
-          <Skeleton className="w-14 h-14 rounded-xl" />
+          <Skeleton className="w-14 h-14 rounded-lg" />
           <Skeleton className="h-4 w-44" />
           <Skeleton className="h-3.5 w-56" />
         </div>
@@ -66,11 +66,11 @@ export default function GlobalMapsPage() {
         >
           <div className="p-4 border-b border-border/80 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-secondary text-foreground border border-border shadow-2xs">
+              <div className="p-2 rounded-lg bg-secondary text-foreground border border-border shadow-2xs">
                 <MapIcon className="w-4 h-4 text-primary" />
               </div>
               <div>
-                <h3 className="font-extrabold text-sm text-foreground">
+                <h3 className="font-bold text-sm text-foreground">
                   Jenis Tampilan Peta
                 </h3>
               </div>
@@ -79,7 +79,7 @@ export default function GlobalMapsPage() {
               variant="ghost"
               size="icon-sm"
               onClick={() => setIsMobilePanelOpen(false)}
-              className="md:hidden h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
+              className="md:hidden h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground"
             >
               <X className="w-4 h-4" />
             </Button>
@@ -88,14 +88,14 @@ export default function GlobalMapsPage() {
           <div className="p-3 border-b border-border/60">
             <Link
               href="/"
-              className="flex items-center gap-2.5 px-4 py-2 rounded-full text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-secondary/70 transition-all group"
+              className="flex items-center gap-2.5 px-3.5 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/70 transition-all group"
             >
               <Home className="w-4 h-4 text-primary group-hover:scale-110 transition-transform shrink-0" />
               <span>Kembali ke Beranda</span>
             </Link>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+          <div className="flex-1 overflow-y-auto p-3 space-y-2">
             {BASEMAP_OPTIONS.map((mapOption) => {
               const isSelected = activeBasemapId === mapOption.id;
 
@@ -103,34 +103,30 @@ export default function GlobalMapsPage() {
                 <div
                   key={mapOption.id}
                   onClick={() => handleSelectMap(mapOption.id)}
-                  className={`p-3.5 rounded-2xl border transition-all cursor-pointer group ${
+                  className={`p-3 rounded-lg border transition-all cursor-pointer group ${
                     isSelected
-                      ? "border-primary bg-card ring-2 ring-primary/40 shadow-xs"
-                      : "border-border/80 bg-card hover:border-primary/50 hover:bg-secondary/40"
+                      ? "border-primary bg-card ring-1 ring-primary shadow-xs"
+                      : "border-border/80 bg-card hover:border-zinc-500 hover:bg-secondary/40"
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1.5">
                     <div className="flex items-center gap-2.5">
                       <span
-                        className="w-3 h-3 rounded-full shrink-0 shadow-xs"
+                        className="w-2.5 h-2.5 rounded-full shrink-0 shadow-xs"
                         style={{ backgroundColor: mapOption.previewColor }}
                       />
                       <span className="font-bold text-xs sm:text-sm text-foreground group-hover:text-primary transition-colors">
                         {mapOption.name}
                       </span>
                     </div>
-                    {isSelected ? (
-                      <Badge className="text-xs bg-primary text-primary-foreground h-5 px-2 font-semibold rounded-full shrink-0">
+                    {isSelected && (
+                      <Badge className="text-xs font-mono bg-primary text-primary-foreground h-5 px-2 font-medium rounded-full shrink-0">
                         <Check className="w-3 h-3 mr-0.5" />
                         Aktif
                       </Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-xs text-muted-foreground font-medium h-5 px-2 rounded-full shrink-0 border-border">
-                        {mapOption.type}
-                      </Badge>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground leading-relaxed pl-5.5">
+                  <p className="text-xs text-muted-foreground leading-relaxed pl-5">
                     {mapOption.description}
                   </p>
                 </div>
@@ -144,7 +140,7 @@ export default function GlobalMapsPage() {
             <Button
               size="sm"
               onClick={() => setIsMobilePanelOpen(true)}
-              className="rounded-full shadow-lg text-xs font-semibold h-10 px-4 gap-2 bg-card/95 backdrop-blur-md text-foreground border border-border hover:bg-card hover:border-primary/50"
+              className="rounded-lg shadow-lg text-xs font-medium h-9 px-3.5 gap-2 bg-card/95 backdrop-blur-md text-foreground border border-border hover:bg-card hover:border-zinc-500"
             >
               <Layers className="w-4 h-4 text-primary" />
               <span>Gaya Peta ({activeBasemap.name})</span>
