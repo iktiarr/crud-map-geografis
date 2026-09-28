@@ -1,0 +1,365 @@
+/**
+ * Road Routing & Geocoding Service (Module 5)
+ * Reads real-world road networks using OSRM (Open Source Routing Machine),
+ * supports multi-stop waypoints (N points), and resolves street names using OpenStreetMap Nominatim.
+ */
+
+export interface WaypointItem {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+}
+
+export interface MultiPointRouteResult {
+  success: boolean;
+  coordinates: [number, number][]; // [lng, lat] for GeoJSON
+  leafletPoints: [number, number][]; // [lat, lng] for Leaflet
+  distanceKm: number;
+  durationMin: number;
+  streetNames: string[];
+  summary: string;
+  legs: {
+    fromName?: string;
+    toName?: string;
+    distanceKm: number;
+    durationMin: number;
+  }[];
+}
+
+export interface PresetRoadPoint {
+  id: string;
+  name: string;
+  roadName: string;
+  city: string;
+  lat: number;
+  lng: number;
+}
+
+export const PRESET_ROAD_POINTS: PresetRoadPoint[] = [
+  // Wilayah Kuningan (Jawa Barat)
+  {
+    id: "kng-1",
+    name: "Taman Kota Kuningan",
+    roadName: "Jl. Veteran",
+    city: "Kuningan",
+    lat: -6.9772,
+    lng: 108.4838,
+  },
+  {
+    id: "kng-2",
+    name: "Stadion Mashud Wisnusaputra",
+    roadName: "Jl. Siliwangi",
+    city: "Kuningan",
+    lat: -6.9685,
+    lng: 108.4872,
+  },
+  {
+    id: "kng-3",
+    name: "Kawasan Wisata Cigugur",
+    roadName: "Jl. Raya Cigugur",
+    city: "Kuningan",
+    lat: -6.9856,
+    lng: 108.4593,
+  },
+  {
+    id: "kng-4",
+    name: "Bundaran Cijoho",
+    roadName: "Jl. R.E. Martadinata",
+    city: "Kuningan",
+    lat: -6.9621,
+    lng: 108.4905,
+  },
+  {
+    id: "kng-5",
+    name: "Terminal Tipe A Kertawangunan",
+    roadName: "Jl. Baru Lingkar Timur",
+    city: "Kuningan",
+    lat: -6.9798,
+    lng: 108.5284,
+  },
+  {
+    id: "kng-6",
+    name: "Gedung Perundingan Linggarjati",
+    roadName: "Jl. Linggajati",
+    city: "Kuningan",
+    lat: -6.8775,
+    lng: 108.4756,
+  },
+
+  // Wilayah Bandung
+  {
+    id: "bdg-1",
+    name: "Gedung Sate Bandung",
+    roadName: "Jl. Diponegoro",
+    city: "Bandung",
+    lat: -6.9024,
+    lng: 107.6186,
+  },
+  {
+    id: "bdg-2",
+    name: "Alun-Alun Kota Bandung",
+    roadName: "Jl. Asia Afrika",
+    city: "Bandung",
+    lat: -6.9218,
+    lng: 107.6074,
+  },
+  {
+    id: "bdg-3",
+    name: "Institut Teknologi Bandung (ITB)",
+    roadName: "Jl. Ganesa",
+    city: "Bandung",
+    lat: -6.8915,
+    lng: 107.6107,
+  },
+
+  // Wilayah Jakarta
+  {
+    id: "jkt-1",
+    name: "Monumen Nasional (Monas)",
+    roadName: "Jl. Medan Merdeka Barat",
+    city: "Jakarta",
+    lat: -6.1754,
+    lng: 106.8272,
+  },
+  {
+    id: "jkt-2",
+    name: "Bundaran HI",
+    roadName: "Jl. M.H. Thamrin",
+    city: "Jakarta",
+    lat: -6.1950,
+    lng: 106.8231,
+  },
+  {
+    id: "jkt-3",
+    name: "Gelora Bung Karno (GBK)",
+    roadName: "Jl. Jenderal Sudirman",
+    city: "Jakarta",
+    lat: -6.2185,
+    lng: 106.8018,
+  },
+];
+
+
+
+/**
+ * Multi-point road route calculation (Connects 2 or more waypoints)
+ */
+export async function calculateMultiPointRoadRoute(
+  waypoints: { lat: number; lng: number; name?: string }[],
+  mode: "driving" | "bike" | "foot" = "driving"
+): Promise<MultiPointRouteResult> {
+  if (waypoints.length < 2) {
+    return {
+      success: false,
+      coordinates: [],
+      leafletPoints: [],
+      distanceKm: 0,
+      durationMin: 0,
+      streetNames: [],
+      summary: "Memerlukan minimal 2 titik untuk perutean jalan",
+      legs: [],
+    };
+  }
+
+  const profile = mode === "foot" ? "foot" : mode === "bike" ? "bicycle" : "driving";
+  const coordsParam = waypoints.map((p) => `${p.lng},${p.lat}`).join(";");
+  const url = `https://router.project-osrm.org/route/v1/${profile}/${coordsParam}?overview=full&geometries=geojson&steps=true`;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 9000);
+
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`OSRM HTTP error: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.code === "Ok" && data.routes && data.routes.length > 0) {
+      const route = data.routes[0];
+      const coords = route.geometry.coordinates as [number, number][]; // [lng, lat]
+      const distanceKm = Number((route.distance / 1000).toFixed(2));
+      const durationMin = Math.round(route.duration / 60) || 1;
+
+      // Extract street names
+      const streetNamesSet = new Set<string>();
+      const legs: MultiPointRouteResult["legs"] = [];
+
+      if (route.legs && Array.isArray(route.legs)) {
+        route.legs.forEach((leg: { distance: number; duration: number; steps?: { name?: string }[] }, idx: number) => {
+          legs.push({
+            fromName: waypoints[idx]?.name || `Titik ${idx + 1}`,
+            toName: waypoints[idx + 1]?.name || `Titik ${idx + 2}`,
+            distanceKm: Number((leg.distance / 1000).toFixed(2)),
+            durationMin: Math.round(leg.duration / 60) || 1,
+          });
+
+          if (leg.steps) {
+            leg.steps.forEach((s) => {
+              if (s.name && s.name.trim() !== "") {
+                streetNamesSet.add(s.name.trim());
+              }
+            });
+          }
+        });
+      }
+
+      const streetNames = Array.from(streetNamesSet);
+      const leafletPoints: [number, number][] = coords.map((c) => [c[1], c[0]]);
+
+      return {
+        success: true,
+        coordinates: coords,
+        leafletPoints,
+        distanceKm,
+        durationMin,
+        streetNames,
+        summary:
+          streetNames.length > 0
+            ? streetNames.slice(0, 3).join(" ➔ ")
+            : `${waypoints.length} Titik Terhubung`,
+        legs,
+      };
+    }
+
+    throw new Error("No multi-point route found in OSRM response");
+  } catch (err) {
+    console.warn("OSRM multi-point routing failed, fallback to sequential curves:", err);
+
+    // Fallback: connect points sequentially
+    const fallbackLeafletPoints: [number, number][] = [];
+    let totalDist = 0;
+    const legs: MultiPointRouteResult["legs"] = [];
+
+    for (let i = 0; i < waypoints.length - 1; i++) {
+      const p1 = waypoints[i];
+      const p2 = waypoints[i + 1];
+      const segmentPoints = generateInterpolatedPath(p1.lat, p1.lng, p2.lat, p2.lng, 10);
+      const segDist = calculateHaversine(p1.lat, p1.lng, p2.lat, p2.lng);
+      totalDist += segDist;
+
+      legs.push({
+        fromName: p1.name || `Titik ${i + 1}`,
+        toName: p2.name || `Titik ${i + 2}`,
+        distanceKm: Number(segDist.toFixed(2)),
+        durationMin: Math.max(1, Math.round((segDist / 35) * 60)),
+      });
+
+      if (i === 0) {
+        fallbackLeafletPoints.push(...segmentPoints);
+      } else {
+        fallbackLeafletPoints.push(...segmentPoints.slice(1));
+      }
+    }
+
+    return {
+      success: true,
+      coordinates: fallbackLeafletPoints.map((c) => [c[1], c[0]]),
+      leafletPoints: fallbackLeafletPoints,
+      distanceKm: Number(totalDist.toFixed(2)),
+      durationMin: Math.max(1, Math.round((totalDist / 35) * 60)),
+      streetNames: [],
+      summary: `${waypoints.length} Titik Terhubung (Mode Cadangan)`,
+      legs,
+    };
+  }
+}
+
+/**
+ * Legacy 2-point calculation (wraps multi-point)
+ */
+export async function calculateRoadRoute(
+  startLat: number,
+  startLng: number,
+  endLat: number,
+  endLng: number,
+  mode: "driving" | "bike" | "foot" = "driving"
+) {
+  return calculateMultiPointRoadRoute(
+    [
+      { lat: startLat, lng: startLng },
+      { lat: endLat, lng: endLng },
+    ],
+    mode
+  );
+}
+
+/**
+ * Reverse Geocode: resolve street/road name for a given coordinate
+ */
+export async function reverseGeocodeRoadName(lat: number, lng: number): Promise<string> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`;
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        "Accept-Language": "id,en",
+        "User-Agent": "GeospatialStudioRoadRouter/1.0",
+      },
+    });
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      const data = await res.json();
+      const addr = data.address || {};
+      const road =
+        addr.road ||
+        addr.pedestrian ||
+        addr.street ||
+        addr.neighbourhood ||
+        addr.suburb ||
+        data.display_name?.split(",")[0];
+      if (road) return road;
+    }
+  } catch (e) {
+    console.warn("Reverse geocode notice:", e);
+  }
+
+  return `Titik (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+}
+
+
+
+/**
+ * Haversine formula calculation (km)
+ */
+export function calculateHaversine(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+/**
+ * Fallback curved interpolation between two coordinates
+ */
+function generateInterpolatedPath(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+  numPoints = 12
+): [number, number][] {
+  const points: [number, number][] = [];
+  for (let i = 0; i <= numPoints; i++) {
+    const t = i / numPoints;
+    const lat = lat1 + (lat2 - lat1) * t;
+    const lng = lng1 + (lng2 - lng1) * t;
+    points.push([lat, lng]);
+  }
+  return points;
+}

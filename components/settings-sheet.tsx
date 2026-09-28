@@ -151,26 +151,28 @@ export function SettingsSheet() {
       >
         <SheetTrigger
           render={
-            <button
-              type="button"
-              className="flex items-center gap-2 cursor-pointer group focus-visible:outline-none"
-              aria-label="Buka Pengaturan"
-            >
-              {isAuthenticated && user && (
-                <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary group-hover:bg-secondary/80 border border-border text-xs font-medium text-foreground transition-all shadow-xs">
-                  <div className="w-5 h-5 rounded-md bg-primary text-primary-foreground font-bold text-xs flex items-center justify-center shrink-0">
-                    {userInitial}
-                  </div>
-                  <span className="truncate max-w-36 font-mono">@{user.username}</span>
+            isAuthenticated && user ? (
+              <button
+                type="button"
+                className="flex items-center gap-2 h-9 px-3 rounded-lg bg-secondary hover:bg-secondary/80 border border-border hover:border-zinc-400 text-xs sm:text-sm font-medium text-foreground transition-all shadow-xs cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Pengaturan Akun"
+                title={`Pengaturan Akun (@${user.username})`}
+              >
+                <div className="w-5 h-5 rounded-md bg-primary text-primary-foreground font-bold text-xs flex items-center justify-center shrink-0">
+                  {userInitial}
                 </div>
-              )}
-              <div
-                className="h-9 w-9 rounded-lg border border-border bg-card hover:border-zinc-400 hover:bg-secondary text-foreground shadow-xs transition-colors flex items-center justify-center shrink-0"
+                <span className="truncate max-w-28 sm:max-w-36 font-mono">@{user.username}</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="h-9 w-9 rounded-lg border border-border bg-card hover:border-zinc-400 hover:bg-secondary text-foreground shadow-xs transition-colors flex items-center justify-center shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Buka Pengaturan"
                 title="Buka Pengaturan"
               >
                 <Settings className="w-4 h-4 text-foreground" />
-              </div>
-            </button>
+              </button>
+            )
           }
         />
 

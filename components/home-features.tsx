@@ -98,18 +98,18 @@ const features: FeatureItem[] = [
   },
   {
     id: "distance-routing",
-    title: "5. Jarak & Rute Spasial",
-    subtitle: "Pengukuran Jarak & Estimasi Jangkauan",
-    description: "Menghitung estimasi jarak antar titik lokasi secara akurat serta memvisualisasikan radius jangkauan layanan dari suatu fasilitas.",
+    title: "5. Pemetaan Jalan yang Dilalui",
+    subtitle: "Pemetaan Ruas Jalan & Garis Kustomisasi",
+    description: "Sistem membaca jaringan jalan, menghubungkan dua titik pilihan dengan garis berwarna kustom (warna, ketebalan, gaya garis), serta menyimpan riwayat ke database terpisah.",
     href: "/distance-routing",
     icon: Route,
-    badge: "Geodesik",
+    badge: "Database",
     accentBg: "bg-secondary text-foreground border-border",
     borderHover: "hover:border-zinc-500/80 hover:shadow-lg hover:shadow-black/50",
     featuresList: [
-      "Pengukuran jarak langsung antar lokasi",
-      "Simulasi radius jangkauan area",
-      "Pencatatan riwayat perhitungan"
+      "Membaca jaringan jalan dan perutean otomatis",
+      "Kustomisasi warna, ketebalan, dan gaya garis rute",
+      "Penyimpanan dan penghapusan database terpisah"
     ]
   },
   {
