@@ -4,8 +4,10 @@ import * as React from "react";
 import type * as LType from "leaflet";
 import { BASEMAP_OPTIONS } from "./basemap-config";
 import { 
-  WaypointItem 
+  WaypointItem,
+  AlternativeRouteOption,
 } from "@/lib/road-routing";
+import { Trash2, Loader2 } from "lucide-react";
 
 export interface TraversedRoadRecord {
   id: number;
@@ -43,6 +45,9 @@ export interface LeafletTraversedRoadsMapProps {
   // Multi-point waypoints for active/draft route
   waypoints: WaypointItem[];
   draftPathCoordinates: [number, number][]; // [lat, lng] for Leaflet
+  alternativeRoutes?: AlternativeRouteOption[];
+  selectedAlternativeId?: string | null;
+  onSelectAlternativeRoute?: (id: string | null) => void;
 
   // Customization for current/draft route
   customColor: string;
@@ -54,9 +59,23 @@ export interface LeafletTraversedRoadsMapProps {
   isAddPointMode: boolean;
   onMapClickAddPoint?: (lat: number, lng: number) => void;
   onWaypointDragEnd?: (index: number, lat: number, lng: number) => void;
+  onRouteLineClick?: (lat: number, lng: number) => void;
   onSelectRoute?: (route: TraversedRoadRecord) => void;
   onDeleteRoute?: (id: number) => void;
+  onRemoveWaypoint?: (index: number) => void;
+  hideWaypointsOnMap?: boolean;
   focusedRouteId?: number | null;
+  activeRouteId?: number | null;
+  isCalculatingRoute?: boolean;
+
+  // Insert mode state info
+  insertModeInfo?: {
+    fromIndex: number;
+    toIndex: number;
+    fromName: string;
+    toName: string;
+  } | null;
+  onCancelInsertMode?: () => void;
 
   // Basemap
   activeBasemapId?: string;
@@ -67,6 +86,9 @@ export function LeafletTraversedRoadsMap({
   routes,
   waypoints,
   draftPathCoordinates,
+  alternativeRoutes = [],
+  selectedAlternativeId = null,
+  onSelectAlternativeRoute,
   customColor = "#2563eb",
   customWeight = 6,
   customOpacity = 0.9,
@@ -74,9 +96,16 @@ export function LeafletTraversedRoadsMap({
   isAddPointMode = true,
   onMapClickAddPoint,
   onWaypointDragEnd,
+  onRemoveWaypoint,
+  hideWaypointsOnMap = false,
+  onRouteLineClick,
   onSelectRoute,
   onDeleteRoute,
   focusedRouteId,
+  activeRouteId = null,
+  isCalculatingRoute = false,
+  insertModeInfo,
+  onCancelInsertMode,
   activeBasemapId = "carto-voyager",
   className = "w-full h-full",
 }: LeafletTraversedRoadsMapProps) {
@@ -88,10 +117,10 @@ export function LeafletTraversedRoadsMap({
   // Layer Groups
   const savedRoutesLayerGroupRef = React.useRef<LType.FeatureGroup | null>(null);
   const draftRouteLayerGroupRef = React.useRef<LType.FeatureGroup | null>(null);
+  const alternativeRoutesLayerGroupRef = React.useRef<LType.FeatureGroup | null>(null);
   const waypointsLayerGroupRef = React.useRef<LType.FeatureGroup | null>(null);
 
   const [L, setL] = React.useState<typeof LType | null>(null);
-  const [mapCenterCoords, setMapCenterCoords] = React.useState<{ lat: number; lng: number } | null>(null);
 
   // Dynamic import Leaflet
   React.useEffect(() => {
@@ -137,6 +166,9 @@ export function LeafletTraversedRoadsMap({
     waypoints,
     onMapClickAddPoint,
     onWaypointDragEnd,
+    onRemoveWaypoint,
+    onRouteLineClick,
+    onSelectAlternativeRoute,
     onSelectRoute,
     onDeleteRoute,
   });
@@ -147,10 +179,30 @@ export function LeafletTraversedRoadsMap({
       waypoints,
       onMapClickAddPoint,
       onWaypointDragEnd,
+      onRemoveWaypoint,
+      onRouteLineClick,
+      onSelectAlternativeRoute,
       onSelectRoute,
       onDeleteRoute,
     };
   });
+
+  // State Context Menu Titik (Klik Kanan pada Marker)
+  const [waypointContextMenu, setWaypointContextMenu] = React.useState<{
+    x: number;
+    y: number;
+    index: number;
+    wp: WaypointItem;
+  } | null>(null);
+
+  React.useEffect(() => {
+    if (!waypointContextMenu) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setWaypointContextMenu(null);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [waypointContextMenu]);
 
   // Initialize Map
   React.useEffect(() => {
@@ -174,10 +226,12 @@ export function LeafletTraversedRoadsMap({
 
     // Create layer groups
     const savedRoutesGroup = L.featureGroup().addTo(map);
+    const alternativeRoutesGroup = L.featureGroup().addTo(map);
     const draftRouteGroup = L.featureGroup().addTo(map);
     const waypointsGroup = L.featureGroup().addTo(map);
 
     savedRoutesLayerGroupRef.current = savedRoutesGroup;
+    alternativeRoutesLayerGroupRef.current = alternativeRoutesGroup;
     draftRouteLayerGroupRef.current = draftRouteGroup;
     waypointsLayerGroupRef.current = waypointsGroup;
 
@@ -188,13 +242,6 @@ export function LeafletTraversedRoadsMap({
       if (canAdd && cb) {
         cb(lat, lng);
       }
-    });
-
-    map.on("mousemove", (e: LType.LeafletMouseEvent) => {
-      setMapCenterCoords({
-        lat: Number(e.latlng.lat.toFixed(5)),
-        lng: Number(e.latlng.lng.toFixed(5)),
-      });
     });
 
     const resizeObserver = new ResizeObserver(() => {
@@ -245,6 +292,8 @@ export function LeafletTraversedRoadsMap({
 
     routes.forEach((route) => {
       if (route.isVisible === false) return;
+      // Jangan gambar rute tersimpan jika rute ini sedang diedit aktif di layer draft
+      if (activeRouteId && route.id === activeRouteId) return;
 
       let latlngs: [number, number][] = [];
 
@@ -331,7 +380,10 @@ export function LeafletTraversedRoadsMap({
         const focusBtn = document.getElementById(`btn-focus-${route.id}`);
         if (focusBtn) {
           focusBtn.onclick = () => {
-            mapInstanceRef.current?.fitBounds(mainPolyline.getBounds(), { padding: [50, 50] });
+            const bounds = mainPolyline.getBounds();
+            if (bounds && bounds.isValid()) {
+              mapInstanceRef.current?.fitBounds(bounds, { padding: [50, 50] });
+            }
             callbacksRef.current.onSelectRoute?.(route);
           };
         }
@@ -349,7 +401,7 @@ export function LeafletTraversedRoadsMap({
 
       group.addLayer(mainPolyline);
     });
-  }, [L, routes, focusedRouteId]);
+  }, [L, routes, focusedRouteId, activeRouteId]);
 
   // Render Draft Multi-Point Route Line
   React.useEffect(() => {
@@ -359,13 +411,13 @@ export function LeafletTraversedRoadsMap({
 
     if (draftPathCoordinates.length < 2) return;
 
-    const dash = getDashArray(customLineStyle);
+    const dash = isCalculatingRoute ? "6, 8" : getDashArray(customLineStyle);
 
     // Glowing underlay
     const glowPolyline = L.polyline(draftPathCoordinates, {
       color: customColor,
       weight: customWeight + 6,
-      opacity: 0.35,
+      opacity: isCalculatingRoute ? 0.15 : 0.35,
       lineCap: "round",
       lineJoin: "round",
       interactive: false,
@@ -376,7 +428,7 @@ export function LeafletTraversedRoadsMap({
     const draftPolyline = L.polyline(draftPathCoordinates, {
       color: customColor,
       weight: customWeight,
-      opacity: customOpacity,
+      opacity: isCalculatingRoute ? 0.45 : customOpacity,
       dashArray: dash,
       lineCap: "round",
       lineJoin: "round",
@@ -385,19 +437,85 @@ export function LeafletTraversedRoadsMap({
 
     draftPolyline.bindTooltip(
       `<div class="px-2 py-1 text-xs font-sans">
-        <span class="font-semibold text-foreground">Jalur Jalan Terpilih (${waypoints.length} Titik)</span>
+        <span class="font-semibold text-foreground">${isCalculatingRoute ? "Menyesuaikan rute..." : "Jalur Rute Aktif"}</span>
       </div>`,
       { sticky: true }
     );
 
+    draftPolyline.on("click", (e: LType.LeafletMouseEvent) => {
+      L.DomEvent.stopPropagation(e);
+      if (callbacksRef.current.isAddPointMode && callbacksRef.current.onMapClickAddPoint) {
+        callbacksRef.current.onMapClickAddPoint(e.latlng.lat, e.latlng.lng);
+      }
+    });
+
     group.addLayer(draftPolyline);
-  }, [L, draftPathCoordinates, customColor, customWeight, customOpacity, customLineStyle, waypoints.length]);
+  }, [L, draftPathCoordinates, customColor, customWeight, customOpacity, customLineStyle, isCalculatingRoute, waypoints.length]);
+
+  // Render Alternative Routes (Clickable to switch route)
+  React.useEffect(() => {
+    if (!L || !mapInstanceRef.current || !alternativeRoutesLayerGroupRef.current) return;
+    const group = alternativeRoutesLayerGroupRef.current;
+    group.clearLayers();
+
+    if (!alternativeRoutes || alternativeRoutes.length === 0) return;
+
+    alternativeRoutes.forEach((alt) => {
+      if (selectedAlternativeId === alt.id) return;
+
+      const altPolyline = L.polyline(alt.leafletPoints, {
+        color: "#d97706", // Amber
+        weight: 5,
+        opacity: 0.7,
+        dashArray: "8, 8",
+        lineCap: "round",
+        lineJoin: "round",
+        interactive: true,
+      });
+
+      altPolyline.bindTooltip(
+        `<div class="px-2.5 py-1.5 text-xs font-sans space-y-0.5">
+          <div class="font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full inline-block bg-amber-500"></span>
+            Jalur Alternatif: ${alt.name}
+          </div>
+          <div class="text-[11px] text-muted-foreground font-mono">
+            ${alt.distanceKm} km • ${alt.durationMin} menit
+          </div>
+          <div class="text-[10px] text-primary font-semibold pt-0.5">
+            ⚡ Klik untuk beralih ke rute ini
+          </div>
+        </div>`,
+        { sticky: true }
+      );
+
+      altPolyline.on("mouseover", () => {
+        altPolyline.setStyle({ weight: 7, opacity: 0.95 });
+      });
+
+      altPolyline.on("mouseout", () => {
+        altPolyline.setStyle({ weight: 5, opacity: 0.7 });
+      });
+
+      altPolyline.on("click", (e: LType.LeafletMouseEvent) => {
+        L.DomEvent.stopPropagation(e);
+        callbacksRef.current.onSelectAlternativeRoute?.(alt.id);
+      });
+
+      group.addLayer(altPolyline);
+    });
+  }, [L, alternativeRoutes, selectedAlternativeId]);
 
   // Render Multi-Point Waypoint Markers
   React.useEffect(() => {
     if (!L || !mapInstanceRef.current || !waypointsLayerGroupRef.current) return;
     const group = waypointsLayerGroupRef.current;
     group.clearLayers();
+
+    // Jika pengguna memilih sembunyikan titik, jangan gambar marker di peta
+    if (hideWaypointsOnMap) {
+      return;
+    }
 
     waypoints.forEach((wp, index) => {
       const isStart = index === 0;
@@ -417,7 +535,7 @@ export function LeafletTraversedRoadsMap({
               ${pointNumber}
             </div>
             <div class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 ${arrowBg} rotate-45"></div>
-            <span class="absolute top-9 left-1/2 -translate-x-1/2 whitespace-nowrap bg-background/90 backdrop-blur border border-border text-[10px] font-medium px-2 py-0.5 rounded shadow text-foreground pointer-events-none">
+            <span class="absolute top-9 left-1/2 -translate-x-1/2 whitespace-nowrap bg-background/95 backdrop-blur border border-border text-[10px] font-medium px-2 py-0.5 rounded shadow text-foreground pointer-events-none max-w-32.5 truncate block text-center">
               Titik ${pointNumber}: ${wp.name || "Titik Rute"}
             </span>
           </div>
@@ -429,7 +547,7 @@ export function LeafletTraversedRoadsMap({
       const marker = L.marker([wp.lat, wp.lng], {
         icon: wpIcon,
         draggable: true,
-        title: `Titik ${pointNumber}: ${wp.name || ""}`,
+        title: `Titik ${pointNumber}: ${wp.name || ""} (Klik kanan untuk menghapus)`,
       });
 
       marker.on("dragend", (e: LType.DragEndEvent) => {
@@ -437,17 +555,31 @@ export function LeafletTraversedRoadsMap({
         callbacksRef.current.onWaypointDragEnd?.(index, lat, lng);
       });
 
+      marker.on("contextmenu", (e: LType.LeafletMouseEvent) => {
+        const originalEvent = e.originalEvent as MouseEvent;
+        if (originalEvent) {
+          originalEvent.stopPropagation();
+          originalEvent.preventDefault();
+          setWaypointContextMenu({
+            x: originalEvent.clientX,
+            y: originalEvent.clientY,
+            index,
+            wp,
+          });
+        }
+      });
+
       marker.bindPopup(`
         <div class="p-1 text-xs">
           <strong>Titik ${pointNumber} ${isStart ? "(Awal)" : isEnd ? "(Tujuan Akhir)" : "(Pemberhentian)"}</strong><br />
-          ${wp.name || "Titik Jalan"}<br />
-          <span class="font-mono text-[10px] text-muted-foreground">${wp.lat.toFixed(5)}, ${wp.lng.toFixed(5)}</span>
+          <span class="font-medium">${wp.name || "Titik Jalan"}</span><br />
+          <span class="text-[10px] text-muted-foreground block mt-1">💡 Klik kanan pada pin untuk menghapus titik</span>
         </div>
       `);
 
       group.addLayer(marker);
     });
-  }, [L, waypoints]);
+  }, [L, waypoints, hideWaypointsOnMap]);
 
   // Fit bounds when focusedRouteId changes
   React.useEffect(() => {
@@ -456,11 +588,46 @@ export function LeafletTraversedRoadsMap({
 
     if (focusedRouteId) {
       const targetRoute = routes.find((r) => r.id === focusedRouteId);
-      if (targetRoute && targetRoute.geojson?.coordinates) {
-        const bounds = L.latLngBounds(
-          targetRoute.geojson.coordinates.map((c) => [c[1], c[0]])
-        );
-        map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
+      if (targetRoute) {
+        // Cek koordinat geojson rute
+        const coords = targetRoute.geojson?.coordinates;
+        if (Array.isArray(coords) && coords.length > 0) {
+          const validPoints = coords
+            .filter((c) => Array.isArray(c) && c.length >= 2 && !isNaN(c[0]) && !isNaN(c[1]) && !(c[0] === 0 && c[1] === 0))
+            .map((c) => [c[1], c[0]] as [number, number]);
+
+          if (validPoints.length > 0) {
+            const bounds = L.latLngBounds(validPoints);
+            if (bounds.isValid()) {
+              map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
+              return;
+            }
+          }
+        }
+
+        // Cek waypoints rute jika geojson belum ada / kosong
+        if (Array.isArray(targetRoute.waypoints) && targetRoute.waypoints.length > 0) {
+          const validWaypoints = targetRoute.waypoints
+            .filter((w) => w && !isNaN(w.lat) && !isNaN(w.lng) && !(w.lat === 0 && w.lng === 0))
+            .map((w) => [w.lat, w.lng] as [number, number]);
+
+          if (validWaypoints.length > 0) {
+            const bounds = L.latLngBounds(validWaypoints);
+            if (bounds.isValid()) {
+              map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
+              return;
+            }
+          }
+        }
+
+        // Jika hanya titik tunggal (misal origin yang valid)
+        if (
+          targetRoute.origin_lat &&
+          targetRoute.origin_lng &&
+          !(targetRoute.origin_lat === 0 && targetRoute.origin_lng === 0)
+        ) {
+          map.setView([targetRoute.origin_lat, targetRoute.origin_lng], 15);
+        }
       }
     }
   }, [L, focusedRouteId, routes]);
@@ -469,18 +636,76 @@ export function LeafletTraversedRoadsMap({
     <div className={`relative bg-background overflow-hidden ${className}`}>
       <div ref={mapContainerRef} className="w-full h-full min-h-120 bg-muted/20 z-0" />
 
-      {/* Floating Status / Coordinates Indicator */}
-      <div className="absolute bottom-3 left-3 z-10 flex items-center gap-2 pointer-events-none">
-        <div className="bg-background/85 backdrop-blur-md border border-border px-3 py-1 rounded-lg text-[11px] font-mono text-muted-foreground shadow-sm flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>Jaringan Jalan Aktif</span>
-          {mapCenterCoords && (
-            <span className="hidden sm:inline text-foreground font-medium">
-              | {mapCenterCoords.lat}, {mapCenterCoords.lng}
-            </span>
+      {/* Floating Status Kalkulasi Rute Aktif */}
+      {isCalculatingRoute && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-card/95 backdrop-blur-md border border-primary/30 shadow-lg text-xs font-medium text-primary animate-in fade-in zoom-in-95 pointer-events-none select-none">
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          <span>Menyesuaikan rute dengan jalan...</span>
+        </div>
+      )}
+
+      {/* Floating Banner Mode Sisipkan Titik */}
+      {insertModeInfo && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-background/95 backdrop-blur-md border border-primary/50 shadow-xl px-4 py-2 rounded-full flex items-center gap-3 text-xs font-medium animate-in fade-in slide-in-from-top-2">
+          <span className="w-2.5 h-2.5 rounded-full bg-primary animate-ping shrink-0" />
+          <span className="text-foreground">
+            Klik peta untuk menyisipkan titik lewat antara <strong>Titik {insertModeInfo.fromIndex + 1}</strong> &amp; <strong>Titik {insertModeInfo.toIndex + 1}</strong>
+          </span>
+          {onCancelInsertMode && (
+            <button
+              type="button"
+              onClick={onCancelInsertMode}
+              className="ml-1 text-[11px] px-2.5 py-0.5 rounded-full bg-secondary hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+            >
+              Batal
+            </button>
           )}
         </div>
-      </div>
+      )}
+
+      {/* Context Menu Titik (Klik Kanan pada Pin Marker) */}
+      {waypointContextMenu && (
+        <>
+          <div
+            className="fixed inset-0 z-9998"
+            onClick={() => setWaypointContextMenu(null)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setWaypointContextMenu(null);
+            }}
+          />
+          <div
+            style={{
+              position: "fixed",
+              left: `${Math.min(waypointContextMenu.x + 4, typeof window !== "undefined" ? window.innerWidth - 220 : 500)}px`,
+              top: `${Math.min(waypointContextMenu.y + 4, typeof window !== "undefined" ? window.innerHeight - 120 : 500)}px`,
+            }}
+            className="z-9999 min-w-48 rounded-xl border border-border bg-popover/95 p-1.5 text-popover-foreground shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 select-none"
+          >
+            <div className="px-2.5 py-1.5 mb-1 text-[11px] font-semibold text-muted-foreground border-b border-border/60 flex items-center gap-2">
+              <span className="w-4 h-4 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[10px] font-bold shrink-0">
+                {waypointContextMenu.index + 1}
+              </span>
+              <span className="truncate text-foreground font-medium">
+                {waypointContextMenu.wp.name || `Titik ${waypointContextMenu.index + 1}`}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                const idx = waypointContextMenu.index;
+                setWaypointContextMenu(null);
+                callbacksRef.current.onRemoveWaypoint?.(idx);
+              }}
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-destructive hover:bg-destructive/10 rounded-lg cursor-pointer transition-colors font-medium text-left"
+            >
+              <Trash2 className="w-3.5 h-3.5 shrink-0" />
+              <span>Hapus Titik Ini</span>
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

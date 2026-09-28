@@ -150,7 +150,7 @@ export async function POST(request: Request) {
           if (insertRes[0]) {
             insertedFeatures.push(insertRes[0]);
           }
-        } catch (dbErr) {
+        } catch {
           // Fallback if ST_GeomFromGeoJSON fails on complex multipolygon
           try {
             const fallbackRes = await sql`

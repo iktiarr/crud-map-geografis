@@ -186,87 +186,117 @@ export async function POST(request: Request) {
       );
     }
 
-    if (origin_lat === undefined || origin_lng === undefined || destination_lat === undefined || destination_lng === undefined) {
-      return NextResponse.json(
-        { status: "error", message: "Koordinat titik asal dan tujuan wajib diisi" },
-        { status: 400 }
-      );
-    }
-
-    if (!geojson || !geojson.type || !geojson.coordinates) {
-      return NextResponse.json(
-        { status: "error", message: "Geometri jalur GeoJSON tidak valid" },
-        { status: 400 }
-      );
-    }
-
     const finalFolder = folder_name && folder_name.trim() ? folder_name.trim() : "Tanpa Folder";
-    const geojsonString = JSON.stringify(geojson);
+    const finalOriginName = origin_name && origin_name.trim() ? origin_name.trim() : "Belum ditentukan";
+    const finalDestName = destination_name && destination_name.trim() ? destination_name.trim() : "Belum ditentukan";
+    const finalOriginLat = origin_lat !== undefined ? Number(origin_lat) : 0;
+    const finalOriginLng = origin_lng !== undefined ? Number(origin_lng) : 0;
+    const finalDestLat = destination_lat !== undefined ? Number(destination_lat) : 0;
+    const finalDestLng = destination_lng !== undefined ? Number(destination_lng) : 0;
+    const finalGeojson = geojson && geojson.type && Array.isArray(geojson.coordinates) 
+      ? geojson 
+      : { type: "LineString", coordinates: [] };
+
+    const geojsonString = JSON.stringify(finalGeojson);
     const waypointsJson = JSON.stringify(waypoints || []);
 
     let result;
     try {
-      result = await sql`
-        INSERT INTO traversed_roads (
-          name, 
-          folder_name,
-          origin_name, 
-          origin_lat, 
-          origin_lng, 
-          destination_name, 
-          destination_lat, 
-          destination_lng, 
-          waypoints,
-          distance_km, 
-          duration_min, 
-          color, 
-          weight, 
-          opacity, 
-          line_style, 
-          travel_mode, 
-          category, 
-          description, 
-          geojson, 
-          geom
-        )
-        VALUES (
-          ${name.trim()},
-          ${finalFolder},
-          ${origin_name.trim()},
-          ${Number(origin_lat)},
-          ${Number(origin_lng)},
-          ${destination_name.trim()},
-          ${Number(destination_lat)},
-          ${Number(destination_lng)},
-          ${waypointsJson}::jsonb,
-          ${Number(distance_km)},
-          ${Number(duration_min)},
-          ${color},
-          ${Number(weight)},
-          ${Number(opacity)},
-          ${line_style},
-          ${travel_mode},
-          ${category.trim()},
-          ${description.trim()},
-          ${geojsonString}::jsonb,
-          ST_SetSRID(ST_GeomFromGeoJSON(${geojsonString}), 4326)
-        )
-        RETURNING 
-          id, 
-          name, 
-          folder_name,
-          origin_name, 
-          destination_name, 
-          distance_km, 
-          duration_min, 
-          color, 
-          weight, 
-          opacity, 
-          line_style, 
-          travel_mode, 
-          category, 
-          created_at;
-      `;
+      if (finalGeojson.coordinates && finalGeojson.coordinates.length >= 2) {
+        result = await sql`
+          INSERT INTO traversed_roads (
+            name, 
+            folder_name,
+            origin_name, 
+            origin_lat, 
+            origin_lng, 
+            destination_name, 
+            destination_lat, 
+            destination_lng, 
+            waypoints,
+            distance_km, 
+            duration_min, 
+            color, 
+            weight, 
+            opacity, 
+            line_style, 
+            travel_mode, 
+            category, 
+            description, 
+            geojson, 
+            geom
+          )
+          VALUES (
+            ${name.trim()},
+            ${finalFolder},
+            ${finalOriginName},
+            ${finalOriginLat},
+            ${finalOriginLng},
+            ${finalDestName},
+            ${finalDestLat},
+            ${finalDestLng},
+            ${waypointsJson}::jsonb,
+            ${Number(distance_km || 0)},
+            ${Number(duration_min || 0)},
+            ${color || "#2563eb"},
+            ${Number(weight || 6)},
+            ${Number(opacity !== undefined ? opacity : 0.9)},
+            ${line_style || "solid"},
+            ${travel_mode || "driving"},
+            ${category || "Jalan Terhubung"},
+            ${description || ""},
+            ${geojsonString}::jsonb,
+            ST_SetSRID(ST_GeomFromGeoJSON(${geojsonString}), 4326)
+          )
+          RETURNING *;
+        `;
+      } else {
+        result = await sql`
+          INSERT INTO traversed_roads (
+            name, 
+            folder_name,
+            origin_name, 
+            origin_lat, 
+            origin_lng, 
+            destination_name, 
+            destination_lat, 
+            destination_lng, 
+            waypoints,
+            distance_km, 
+            duration_min, 
+            color, 
+            weight, 
+            opacity, 
+            line_style, 
+            travel_mode, 
+            category, 
+            description, 
+            geojson
+          )
+          VALUES (
+            ${name.trim()},
+            ${finalFolder},
+            ${finalOriginName},
+            ${finalOriginLat},
+            ${finalOriginLng},
+            ${finalDestName},
+            ${finalDestLat},
+            ${finalDestLng},
+            ${waypointsJson}::jsonb,
+            ${Number(distance_km || 0)},
+            ${Number(duration_min || 0)},
+            ${color || "#2563eb"},
+            ${Number(weight || 6)},
+            ${Number(opacity !== undefined ? opacity : 0.9)},
+            ${line_style || "solid"},
+            ${travel_mode || "driving"},
+            ${category || "Jalan Terhubung"},
+            ${description || ""},
+            ${geojsonString}::jsonb
+          )
+          RETURNING *;
+        `;
+      }
     } catch (geomError) {
       console.warn("ST_GeomFromGeoJSON fallback for traversed_roads:", geomError);
       result = await sql`

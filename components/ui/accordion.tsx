@@ -5,10 +5,17 @@ import { Accordion as AccordionPrimitive } from "@base-ui/react/accordion";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-function Accordion({ className, ...props }: AccordionPrimitive.Root.Props) {
+function Accordion({
+  className,
+  type,
+  multiple,
+  ...props
+}: AccordionPrimitive.Root.Props & { type?: "single" | "multiple" }) {
+  const isMultiple = multiple !== undefined ? multiple : type === "multiple";
   return (
     <AccordionPrimitive.Root
       data-slot="accordion"
+      multiple={isMultiple}
       className={cn(
         "flex w-full flex-col overflow-hidden rounded-lg border border-border bg-card",
         className
@@ -61,7 +68,7 @@ function AccordionContent({
   return (
     <AccordionPrimitive.Panel
       data-slot="accordion-content"
-      className="overflow-hidden px-4 pb-4 pt-1 text-sm transition-all"
+      className="data-open:overflow-visible overflow-hidden px-4 pb-4 pt-1 text-sm transition-all"
       {...props}
     >
       <div className={cn("space-y-2", className)}>

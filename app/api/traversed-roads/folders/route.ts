@@ -134,7 +134,16 @@ export async function DELETE(request: Request) {
   try {
     await initDatabase();
     const { searchParams } = new URL(request.url);
-    const folderName = searchParams.get("name");
+    let folderName = searchParams.get("name");
+
+    if (!folderName) {
+      try {
+        const body = await request.json();
+        folderName = body?.name;
+      } catch {
+        // Body was empty or not json
+      }
+    }
 
     if (!folderName || !folderName.trim()) {
       return NextResponse.json(

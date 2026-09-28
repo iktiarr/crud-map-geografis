@@ -3,7 +3,12 @@
 import * as React from "react";
 import dynamic from "next/dynamic";
 import { ChevronRight, Loader2 } from "lucide-react";
-import { TraversedRoadRecord, WaypointItem, LineStyle } from "../tipe";
+import { 
+  TraversedRoadRecord, 
+  WaypointItem, 
+  LineStyle,
+  AlternativeRouteOption,
+} from "../tipe";
 
 // Dynamic import Leaflet map (non-SSR)
 const LeafletTraversedRoadsMap = dynamic(
@@ -28,6 +33,9 @@ interface PetaRuteProps {
   routes: TraversedRoadRecord[];
   waypoints: WaypointItem[];
   draftPathCoordinates: [number, number][];
+  alternativeRoutes?: AlternativeRouteOption[];
+  selectedAlternativeId?: string | null;
+  onSelectAlternativeRoute?: (id: string | null) => void;
   customColor: string;
   customWeight: number;
   customOpacity: number;
@@ -35,9 +43,21 @@ interface PetaRuteProps {
   isAddPointMode: boolean;
   onMapClickAddWaypoint: (lat: number, lng: number) => void;
   onWaypointDragEnd: (index: number, lat: number, lng: number) => void;
+  onRouteLineClick?: (lat: number, lng: number) => void;
+  insertModeInfo?: {
+    fromIndex: number;
+    toIndex: number;
+    fromName: string;
+    toName: string;
+  } | null;
+  onCancelInsertMode?: () => void;
   basemapId: string;
   focusedRouteId: number | null;
+  activeRouteId?: number | null;
+  isCalculatingRoute?: boolean;
   onRouteClick: (route: TraversedRoadRecord) => void;
+  onRemoveWaypoint?: (index: number) => void;
+  hideWaypointsOnMap?: boolean;
 }
 
 export function PetaRute({
@@ -46,6 +66,9 @@ export function PetaRute({
   routes,
   waypoints,
   draftPathCoordinates,
+  alternativeRoutes,
+  selectedAlternativeId,
+  onSelectAlternativeRoute,
   customColor,
   customWeight,
   customOpacity,
@@ -53,9 +76,16 @@ export function PetaRute({
   isAddPointMode,
   onMapClickAddWaypoint,
   onWaypointDragEnd,
+  onRouteLineClick,
+  insertModeInfo,
+  onCancelInsertMode,
   basemapId,
   focusedRouteId,
+  activeRouteId,
+  isCalculatingRoute,
   onRouteClick,
+  onRemoveWaypoint,
+  hideWaypointsOnMap,
 }: PetaRuteProps) {
   return (
     <main className="flex-1 h-full w-full relative overflow-hidden bg-muted/10">
@@ -77,6 +107,9 @@ export function PetaRute({
         routes={routes}
         waypoints={waypoints}
         draftPathCoordinates={draftPathCoordinates}
+        alternativeRoutes={alternativeRoutes}
+        selectedAlternativeId={selectedAlternativeId}
+        onSelectAlternativeRoute={onSelectAlternativeRoute}
         customColor={customColor}
         customWeight={customWeight}
         customOpacity={customOpacity}
@@ -84,10 +117,18 @@ export function PetaRute({
         isAddPointMode={isAddPointMode}
         onMapClickAddPoint={onMapClickAddWaypoint}
         onWaypointDragEnd={onWaypointDragEnd}
+        onRemoveWaypoint={onRemoveWaypoint}
+        hideWaypointsOnMap={hideWaypointsOnMap}
+        onRouteLineClick={onRouteLineClick}
+        insertModeInfo={insertModeInfo}
+        onCancelInsertMode={onCancelInsertMode}
         activeBasemapId={basemapId}
         focusedRouteId={focusedRouteId}
+        activeRouteId={activeRouteId}
+        isCalculatingRoute={isCalculatingRoute}
         onSelectRoute={onRouteClick}
       />
     </main>
   );
 }
+

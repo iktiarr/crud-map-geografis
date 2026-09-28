@@ -94,41 +94,117 @@ export async function PUT(
     const {
       name,
       folder_name,
+      origin_name,
+      origin_lat,
+      origin_lng,
+      destination_name,
+      destination_lat,
+      destination_lng,
+      waypoints,
+      distance_km,
+      duration_min,
       color,
       weight,
       opacity,
       line_style,
+      travel_mode,
       category,
       description,
+      geojson,
     } = body;
 
     const finalFolder = folder_name !== undefined ? (folder_name && folder_name.trim() ? folder_name.trim() : "Tanpa Folder") : null;
+    const geojsonString = geojson !== undefined ? JSON.stringify(geojson) : null;
+    const waypointsJson = waypoints !== undefined ? JSON.stringify(waypoints) : null;
 
-    const updated = await sql`
-      UPDATE traversed_roads
-      SET 
-        name = COALESCE(${name !== undefined ? name.trim() : null}, name),
-        folder_name = COALESCE(${finalFolder}, folder_name),
-        color = COALESCE(${color}, color),
-        weight = COALESCE(${weight !== undefined ? Number(weight) : null}, weight),
-        opacity = COALESCE(${opacity !== undefined ? Number(opacity) : null}, opacity),
-        line_style = COALESCE(${line_style}, line_style),
-        category = COALESCE(${category !== undefined ? category.trim() : null}, category),
-        description = COALESCE(${description !== undefined ? description.trim() : null}, description),
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = ${numId}
-      RETURNING 
-        id, 
-        name, 
-        folder_name,
-        color, 
-        weight, 
-        opacity, 
-        line_style, 
-        category, 
-        description, 
-        updated_at;
-    `;
+    let updated;
+    try {
+      if (geojson && geojson.coordinates && Array.isArray(geojson.coordinates) && geojson.coordinates.length >= 2) {
+        updated = await sql`
+          UPDATE traversed_roads
+          SET 
+            name = COALESCE(${name !== undefined ? name.trim() : null}, name),
+            folder_name = COALESCE(${finalFolder}, folder_name),
+            origin_name = COALESCE(${origin_name !== undefined ? origin_name.trim() : null}, origin_name),
+            origin_lat = COALESCE(${origin_lat !== undefined ? Number(origin_lat) : null}, origin_lat),
+            origin_lng = COALESCE(${origin_lng !== undefined ? Number(origin_lng) : null}, origin_lng),
+            destination_name = COALESCE(${destination_name !== undefined ? destination_name.trim() : null}, destination_name),
+            destination_lat = COALESCE(${destination_lat !== undefined ? Number(destination_lat) : null}, destination_lat),
+            destination_lng = COALESCE(${destination_lng !== undefined ? Number(destination_lng) : null}, destination_lng),
+            waypoints = COALESCE(${waypointsJson}::jsonb, waypoints),
+            distance_km = COALESCE(${distance_km !== undefined ? Number(distance_km) : null}, distance_km),
+            duration_min = COALESCE(${duration_min !== undefined ? Number(duration_min) : null}, duration_min),
+            color = COALESCE(${color}, color),
+            weight = COALESCE(${weight !== undefined ? Number(weight) : null}, weight),
+            opacity = COALESCE(${opacity !== undefined ? Number(opacity) : null}, opacity),
+            line_style = COALESCE(${line_style}, line_style),
+            travel_mode = COALESCE(${travel_mode}, travel_mode),
+            category = COALESCE(${category !== undefined ? category.trim() : null}, category),
+            description = COALESCE(${description !== undefined ? description.trim() : null}, description),
+            geojson = COALESCE(${geojsonString}::jsonb, geojson),
+            geom = ST_SetSRID(ST_GeomFromGeoJSON(${geojsonString}), 4326),
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = ${numId}
+          RETURNING *;
+        `;
+      } else {
+        updated = await sql`
+          UPDATE traversed_roads
+          SET 
+            name = COALESCE(${name !== undefined ? name.trim() : null}, name),
+            folder_name = COALESCE(${finalFolder}, folder_name),
+            origin_name = COALESCE(${origin_name !== undefined ? origin_name.trim() : null}, origin_name),
+            origin_lat = COALESCE(${origin_lat !== undefined ? Number(origin_lat) : null}, origin_lat),
+            origin_lng = COALESCE(${origin_lng !== undefined ? Number(origin_lng) : null}, origin_lng),
+            destination_name = COALESCE(${destination_name !== undefined ? destination_name.trim() : null}, destination_name),
+            destination_lat = COALESCE(${destination_lat !== undefined ? Number(destination_lat) : null}, destination_lat),
+            destination_lng = COALESCE(${destination_lng !== undefined ? Number(destination_lng) : null}, destination_lng),
+            waypoints = COALESCE(${waypointsJson}::jsonb, waypoints),
+            distance_km = COALESCE(${distance_km !== undefined ? Number(distance_km) : null}, distance_km),
+            duration_min = COALESCE(${duration_min !== undefined ? Number(duration_min) : null}, duration_min),
+            color = COALESCE(${color}, color),
+            weight = COALESCE(${weight !== undefined ? Number(weight) : null}, weight),
+            opacity = COALESCE(${opacity !== undefined ? Number(opacity) : null}, opacity),
+            line_style = COALESCE(${line_style}, line_style),
+            travel_mode = COALESCE(${travel_mode}, travel_mode),
+            category = COALESCE(${category !== undefined ? category.trim() : null}, category),
+            description = COALESCE(${description !== undefined ? description.trim() : null}, description),
+            geojson = COALESCE(${geojsonString}::jsonb, geojson),
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = ${numId}
+          RETURNING *;
+        `;
+      }
+    } catch (sqlErr) {
+      console.warn("Update fallback without geom:", sqlErr);
+      updated = await sql`
+        UPDATE traversed_roads
+        SET 
+          name = COALESCE(${name !== undefined ? name.trim() : null}, name),
+          folder_name = COALESCE(${finalFolder}, folder_name),
+          origin_name = COALESCE(${origin_name !== undefined ? origin_name.trim() : null}, origin_name),
+          origin_lat = COALESCE(${origin_lat !== undefined ? Number(origin_lat) : null}, origin_lat),
+          origin_lng = COALESCE(${origin_lng !== undefined ? Number(origin_lng) : null}, origin_lng),
+          destination_name = COALESCE(${destination_name !== undefined ? destination_name.trim() : null}, destination_name),
+          destination_lat = COALESCE(${destination_lat !== undefined ? Number(destination_lat) : null}, destination_lat),
+          destination_lng = COALESCE(${destination_lng !== undefined ? Number(destination_lng) : null}, destination_lng),
+          waypoints = COALESCE(${waypointsJson}::jsonb, waypoints),
+          distance_km = COALESCE(${distance_km !== undefined ? Number(distance_km) : null}, distance_km),
+          duration_min = COALESCE(${duration_min !== undefined ? Number(duration_min) : null}, duration_min),
+          color = COALESCE(${color}, color),
+          weight = COALESCE(${weight !== undefined ? Number(weight) : null}, weight),
+          opacity = COALESCE(${opacity !== undefined ? Number(opacity) : null}, opacity),
+          line_style = COALESCE(${line_style}, line_style),
+          travel_mode = COALESCE(${travel_mode}, travel_mode),
+          category = COALESCE(${category !== undefined ? category.trim() : null}, category),
+          description = COALESCE(${description !== undefined ? description.trim() : null}, description),
+          geojson = COALESCE(${geojsonString}::jsonb, geojson),
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ${numId}
+        RETURNING *;
+      `;
+    }
+
 
     if (!updated || updated.length === 0) {
       return NextResponse.json(

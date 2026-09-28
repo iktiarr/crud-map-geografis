@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { AlertTriangle, RotateCcw, Trash2, AlertCircle } from "lucide-react";
+import { RotateCcw, Trash2, AlertCircle } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,

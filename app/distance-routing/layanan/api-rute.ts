@@ -144,10 +144,11 @@ export async function hapusFolder(
   name: string
 ): Promise<{ success: boolean; message?: string }> {
   try {
-    const res = await fetch(`${BASE_API}/folders`, {
+    const url = `${BASE_API}/folders?name=${encodeURIComponent(name.trim())}`;
+    const res = await fetch(url, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name: name.trim() }),
     });
     const json = await res.json();
     return { success: json.status === "success", message: json.message };

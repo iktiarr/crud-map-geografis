@@ -59,6 +59,9 @@ export default function DistanceRoutingPage() {
   const [isCalculatingRoute, setIsCalculatingRoute] = React.useState(false);
   const [draftRouteData, setDraftRouteData] = React.useState<MultiPointRouteResult | null>(null);
 
+  // State Pemilihan Jalur Alternatif
+  const [selectedAlternativeId, setSelectedAlternativeId] = React.useState<string | null>(null);
+
   // State Kustomisasi Garis Rute
   const [customColor, setCustomColor] = React.useState(DEFAULT_ROUTE_CONFIG.color);
   const [customWeight, setCustomWeight] = React.useState(DEFAULT_ROUTE_CONFIG.weight);
@@ -69,8 +72,30 @@ export default function DistanceRoutingPage() {
   const routeCategory = DEFAULT_ROUTE_CONFIG.category;
 
   // State Aksi & Notifikasi Toast
+  const [hideWaypointsOnMap, setHideWaypointsOnMap] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
   const [toastMessage, setToastMessage] = React.useState<ToastMessage | null>(null);
+  const [activeRouteId, setActiveRouteId] = React.useState<number | null>(null);
+
+  // Auto-Save Refs untuk Mencegah Stale State & Request Berlebih
+  const latestStateRef = React.useRef({
+    activeRouteId: null as number | null,
+    routeName: "Rute Baru",
+    targetFolder: "Utama",
+    customColor: DEFAULT_ROUTE_CONFIG.color,
+    customWeight: DEFAULT_ROUTE_CONFIG.weight,
+    customOpacity: DEFAULT_ROUTE_CONFIG.opacity,
+    customLineStyle: DEFAULT_ROUTE_CONFIG.lineStyle as LineStyle,
+    travelMode: DEFAULT_ROUTE_CONFIG.travelMode as TravelMode,
+    routeCategory: DEFAULT_ROUTE_CONFIG.category,
+    waypoints: [] as WaypointItem[],
+    activeDraftCoordinates: [] as [number, number][],
+    activeDraftDistanceKm: 0,
+    activeDraftDurationMin: 0,
+  });
+
+  const saveTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const lastSavedFingerprintRef = React.useRef<string>("");
 
   // State Modal Folder
   const [isNewFolderModalOpen, setIsNewFolderModalOpen] = React.useState(false);
@@ -97,10 +122,11 @@ export default function DistanceRoutingPage() {
 
   // 1. Memuat Rute & Folder dari Database
   const fetchRoutesAndFolders = React.useCallback(async () => {
-    setDbError(null);
     const { routes: fetchedRoutes, folderNames, errorMessage } = await ambilSemuaRuteDanFolder();
     if (errorMessage) {
       setDbError(errorMessage);
+    } else {
+      setDbError(null);
     }
     setRoutes(fetchedRoutes);
     setDbFolders(folderNames);
@@ -108,20 +134,206 @@ export default function DistanceRoutingPage() {
 
   React.useEffect(() => {
     let isMounted = true;
-    fetchRoutesAndFolders().catch((e) => {
+    const initData = async () => {
+      const { routes: fetchedRoutes, folderNames, errorMessage } = await ambilSemuaRuteDanFolder();
+      if (!isMounted) return;
+      if (errorMessage) {
+        setDbError(errorMessage);
+      } else {
+        setDbError(null);
+      }
+      setRoutes(fetchedRoutes);
+      setDbFolders(folderNames);
+    };
+
+    initData().catch((e) => {
       if (isMounted) console.error(e);
     });
+
     return () => {
       isMounted = false;
     };
-  }, [fetchRoutesAndFolders]);
+  }, []);
+
+  // 1.5. Perhitungan Metrik Rute Aktif (Rute Utama vs Jalur Alternatif Terpilih)
+  const activeAlternative = React.useMemo(() => {
+    if (!selectedAlternativeId || !draftRouteData?.alternatives) return null;
+    return draftRouteData.alternatives.find((a) => a.id === selectedAlternativeId) || null;
+  }, [selectedAlternativeId, draftRouteData]);
+
+  const activeDraftLeafletPoints = React.useMemo(() => {
+    if (activeAlternative) return activeAlternative.leafletPoints;
+    return draftRouteData?.leafletPoints || [];
+  }, [activeAlternative, draftRouteData]);
+
+  const activeDraftCoordinates = React.useMemo(() => {
+    if (activeAlternative) return activeAlternative.coordinates;
+    return draftRouteData?.coordinates || [];
+  }, [activeAlternative, draftRouteData]);
+
+  const activeDraftDistanceKm = activeAlternative ? activeAlternative.distanceKm : draftRouteData?.distanceKm || 0;
+  const activeDraftDurationMin = activeAlternative ? activeAlternative.durationMin : draftRouteData?.durationMin || 0;
+
+  // Sinkronisasi latestStateRef agar selalu memegang nilai terbaru tanpa stale closure
+  React.useEffect(() => {
+    latestStateRef.current = {
+      activeRouteId,
+      routeName,
+      targetFolder,
+      customColor,
+      customWeight,
+      customOpacity,
+      customLineStyle,
+      travelMode,
+      routeCategory,
+      waypoints,
+      activeDraftCoordinates,
+      activeDraftDistanceKm,
+      activeDraftDurationMin,
+    };
+  });
+
+  // Fungsi Flush / Auto-Simpan ke Database untuk Rute Aktif
+  const flushSave = React.useCallback(async () => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+
+    const s = latestStateRef.current;
+    if (!s.activeRouteId) return;
+
+    const origin = s.waypoints[0];
+    const destination = s.waypoints[s.waypoints.length - 1];
+
+    const coordinates: [number, number][] =
+      s.activeDraftCoordinates.length > 0
+        ? s.activeDraftCoordinates
+        : s.waypoints.length >= 2
+        ? s.waypoints.map((w) => [w.lng, w.lat] as [number, number])
+        : [];
+
+    const payload: Partial<TraversedRoadRecord> = {
+      name: s.routeName.trim() || (origin && destination ? `${origin.name} ➔ ${destination.name}` : "Rute Baru"),
+      folder_name: s.targetFolder.trim() || "Utama",
+      origin_name: origin?.name || "Belum ditentukan",
+      origin_lat: origin?.lat || 0,
+      origin_lng: origin?.lng || 0,
+      destination_name: destination?.name || "Belum ditentukan",
+      destination_lat: destination?.lat || 0,
+      destination_lng: destination?.lng || 0,
+      waypoints: s.waypoints.map((w, idx) => ({ id: w.id || `wp-${idx}`, name: w.name, lat: w.lat, lng: w.lng })),
+      distance_km: s.activeDraftDistanceKm,
+      duration_min: s.activeDraftDurationMin,
+      color: s.customColor,
+      weight: s.customWeight,
+      opacity: s.customOpacity,
+      line_style: s.customLineStyle,
+      travel_mode: s.travelMode,
+      category: s.routeCategory,
+      geojson: {
+        type: "LineString",
+        coordinates,
+      },
+    };
+
+    const fingerprint = JSON.stringify({
+      id: s.activeRouteId,
+      name: payload.name,
+      folder_name: payload.folder_name,
+      origin_name: payload.origin_name,
+      destination_name: payload.destination_name,
+      waypointsCount: s.waypoints.length,
+      waypoints: s.waypoints.map((w) => [w.lat, w.lng]),
+      coordsCount: coordinates.length,
+      distanceKm: s.activeDraftDistanceKm,
+      durationMin: s.activeDraftDurationMin,
+      color: s.customColor,
+      weight: s.customWeight,
+      line_style: s.customLineStyle,
+    });
+
+    if (fingerprint === lastSavedFingerprintRef.current) {
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const res = await updateKustomisasiRute(s.activeRouteId, payload);
+      if (res.success) {
+        lastSavedFingerprintRef.current = fingerprint;
+        // Update state routes lokal secara instan agar data rute selalu sinkron
+        setRoutes((prev) =>
+          prev.map((r) =>
+            r.id === s.activeRouteId
+              ? {
+                  ...r,
+                  ...payload,
+                  geojson: {
+                    type: "LineString",
+                    coordinates,
+                  },
+                  distance_km: s.activeDraftDistanceKm,
+                  duration_min: s.activeDraftDurationMin,
+                  waypoints: s.waypoints.map((w, idx) => ({
+                    id: w.id || `wp-${idx}`,
+                    name: w.name,
+                    lat: w.lat,
+                    lng: w.lng,
+                  })),
+                }
+              : r
+          )
+        );
+      }
+    } catch (err) {
+      console.error("Auto-save rute error:", err);
+    } finally {
+      setIsSaving(false);
+    }
+  }, []);
+
+  // Debounced Auto-Simpan saat Mengubah Titik / Nama / Warna / Ukuran
+  React.useEffect(() => {
+    if (!activeRouteId || folderSubTab !== "add-route") return;
+
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = setTimeout(() => {
+      flushSave();
+    }, 600);
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [
+    activeRouteId,
+    folderSubTab,
+    routeName,
+    targetFolder,
+    waypoints,
+    activeDraftCoordinates,
+    activeDraftDistanceKm,
+    activeDraftDurationMin,
+    customColor,
+    customWeight,
+    customLineStyle,
+    flushSave,
+  ]);
+
+  // Kunci koordinat titik untuk mencegah OSRM terpanggil berulang saat hanya nama jalan yang di-reverse-geocode
+  const waypointsCoordKey = React.useMemo(
+    () => waypoints.map((w) => `${w.lat.toFixed(6)},${w.lng.toFixed(6)}`).join("|"),
+    [waypoints]
+  );
 
   // 2. Kalkulasi Rute Otomatis saat Waypoint Berubah
   React.useEffect(() => {
-    if (waypoints.length < 2) {
-      setDraftRouteData(null);
-      return;
-    }
+    if (waypoints.length < 2) return;
 
     let isMounted = true;
     calculateMultiPointRoadRoute(waypoints, travelMode)
@@ -129,6 +341,10 @@ export default function DistanceRoutingPage() {
         if (!isMounted) return;
         setDraftRouteData(res);
         setIsCalculatingRoute(false);
+        setSelectedAlternativeId((prev) => {
+          if (prev && res.alternatives?.some((a) => a.id === prev)) return prev;
+          return null;
+        });
       })
       .catch((err) => {
         if (!isMounted) return;
@@ -139,17 +355,18 @@ export default function DistanceRoutingPage() {
     return () => {
       isMounted = false;
     };
-  }, [waypoints, travelMode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waypointsCoordKey, travelMode]);
 
-  // 3. Interaksi Klik Peta untuk Menambah Titik
+  // 3. Interaksi Klik Peta untuk Menambah Titik Secara Berurutan (Append)
   const handleMapClick = async (lat: number, lng: number) => {
     if (!selectedFolder || folderSubTab !== "add-route") return;
 
     setIsCalculatingRoute(true);
     const newId = `wp-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
     const tempName = `Titik ${waypoints.length + 1}`;
-
     const newWp: WaypointItem = { id: newId, name: tempName, lat, lng };
+
     setWaypoints((prev) => [...prev, newWp]);
 
     const roadName = await reverseGeocodeRoadName(lat, lng);
@@ -182,6 +399,7 @@ export default function DistanceRoutingPage() {
   const handleResetWaypoints = () => {
     setWaypoints([]);
     setDraftRouteData(null);
+    setSelectedAlternativeId(null);
     setRouteName("Rute Baru");
     showToast("Titik rute berhasil direset", "success");
   };
@@ -199,14 +417,6 @@ export default function DistanceRoutingPage() {
     });
   };
 
-  const handleReverseAllWaypoints = () => {
-    setWaypoints((prev) => {
-      const reversed = [...prev].reverse();
-      setIsCalculatingRoute(true);
-      return reversed;
-    });
-  };
-
   // 4. Operasi Buka & Tutup Folder
   const handleOpenFolder = (folderName: string) => {
     setSelectedFolder(folderName);
@@ -217,59 +427,19 @@ export default function DistanceRoutingPage() {
   const handleBackToAllFolders = () => {
     setSelectedFolder(null);
     setFolderSubTab("routes-list");
-    setWaypoints([]);
-    setDraftRouteData(null);
-    setRouteName("Rute Baru");
   };
 
-  // 5. Simpan Rute Baru
-  const handleSaveRoute = async () => {
-    if (waypoints.length < 2 || !draftRouteData) {
-      showToast("Tentukan minimal 2 titik jalan terlebih dahulu", "error");
-      return;
-    }
-
-    setIsSaving(true);
-    const origin = waypoints[0];
-    const destination = waypoints[waypoints.length - 1];
-
-    const payload = {
-      name: routeName.trim() || `${origin.name} ➔ ${destination.name}`,
-      folder_name: targetFolder.trim() || "Utama",
-      origin_name: origin.name || "Titik Asal",
-      origin_lat: origin.lat,
-      origin_lng: origin.lng,
-      destination_name: destination.name || "Titik Tujuan",
-      destination_lat: destination.lat,
-      destination_lng: destination.lng,
-      waypoints: waypoints.map((w) => ({ name: w.name, lat: w.lat, lng: w.lng })),
-      distance_km: draftRouteData.distanceKm,
-      duration_min: draftRouteData.durationMin,
-      color: customColor,
-      weight: customWeight,
-      opacity: customOpacity,
-      line_style: customLineStyle,
-      travel_mode: travelMode,
-      category: routeCategory,
-      geojson: {
-        type: "LineString",
-        coordinates: draftRouteData.coordinates,
-      },
-    };
-
-    const res = await simpanRuteBaru(payload);
-    setIsSaving(false);
-
-    if (res.success) {
-      showToast(`Rute "${payload.name}" berhasil disimpan ke folder "${payload.folder_name}"!`, "success");
+  // Navigasi Kembali dari Mode Pemetaan / Edit: Otomatis Simpan & Kembali ke Daftar
+  const handleBackFromEdit = async () => {
+    if (activeRouteId) {
+      await flushSave();
       await fetchRoutesAndFolders();
-      setWaypoints([]);
-      setDraftRouteData(null);
-      setRouteName("Rute Baru");
-      setFolderSubTab("routes-list");
-    } else {
-      showToast(res.message || "Gagal menyimpan rute jalan", "error");
     }
+    setActiveRouteId(null);
+    setWaypoints([]);
+    setDraftRouteData(null);
+    setSelectedAlternativeId(null);
+    setFolderSubTab("routes-list");
   };
 
   // 6. Operasi Folder (Buat, Ubah Nama, Hapus)
@@ -387,25 +557,113 @@ export default function DistanceRoutingPage() {
     }
   };
 
-  // Alur Tambah Rute Baru: Tambah nama folder -> Tambah nama rute -> Baru edit rute tersebut
+  // Alur Tambah Rute Baru: Langsung Simpan ke Database Saat Submit Nama Rute
   const handleOpenNewRouteModal = () => {
     setNewRouteNameInput("");
     setIsNewRouteModalOpen(true);
   };
 
-  const handleSubmitNewRoute = (e: React.FormEvent) => {
+  const handleSubmitNewRoute = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = newRouteNameInput.trim();
     if (!trimmed) {
       showToast("Nama rute tidak boleh kosong", "error");
       return;
     }
-    setRouteName(trimmed);
-    setWaypoints([]);
-    setDraftRouteData(null);
-    setIsNewRouteModalOpen(false);
+
+    const folderForNewRoute = selectedFolder && selectedFolder !== "Tanpa Folder" ? selectedFolder : "Utama";
+
+    setIsSaving(true);
+    const initialPayload = {
+      name: trimmed,
+      folder_name: folderForNewRoute,
+      origin_name: "Belum ditentukan",
+      origin_lat: 0,
+      origin_lng: 0,
+      destination_name: "Belum ditentukan",
+      destination_lat: 0,
+      destination_lng: 0,
+      waypoints: [],
+      distance_km: 0,
+      duration_min: 0,
+      color: customColor,
+      weight: customWeight,
+      opacity: customOpacity,
+      line_style: customLineStyle,
+      travel_mode: travelMode,
+      category: routeCategory,
+      geojson: {
+        type: "LineString",
+        coordinates: [],
+      },
+    };
+
+    const res = await simpanRuteBaru(initialPayload);
+    setIsSaving(false);
+
+    if (res.success && res.data) {
+      setActiveRouteId(res.data.id);
+      setRouteName(trimmed);
+      setTargetFolder(folderForNewRoute);
+      setWaypoints([]);
+      setDraftRouteData(null);
+      setSelectedAlternativeId(null);
+      setIsNewRouteModalOpen(false);
+      setFolderSubTab("add-route");
+      lastSavedFingerprintRef.current = "";
+      await fetchRoutesAndFolders();
+      showToast(`Rute "${trimmed}" berhasil dibuat dan otomatis tersimpan!`, "success");
+    } else {
+      showToast(res.message || "Gagal membuat rute baru", "error");
+    }
+  };
+
+  // Buka Pemetaan / Edit Jalur Rute yang Ada di Peta
+  const handleEditRouteOnMap = (route: TraversedRoadRecord) => {
+    setActiveRouteId(route.id);
+    setRouteName(route.name || "Rute Baru");
+    setTargetFolder(route.folder_name || selectedFolder || "Utama");
+    setCustomColor(route.color || DEFAULT_ROUTE_CONFIG.color);
+    setCustomWeight(route.weight || DEFAULT_ROUTE_CONFIG.weight);
+    const validLineStyles: LineStyle[] = ["solid", "dashed", "dotted"];
+    const style: LineStyle = validLineStyles.includes(route.line_style as LineStyle)
+      ? (route.line_style as LineStyle)
+      : DEFAULT_ROUTE_CONFIG.lineStyle;
+    setCustomLineStyle(style);
+
+    const loadedWaypoints: WaypointItem[] = Array.isArray(route.waypoints)
+      ? route.waypoints.map((wp, idx) => ({
+          id: `wp-${route.id}-${idx}`,
+          name: wp.name || `Titik ${idx + 1}`,
+          lat: wp.lat,
+          lng: wp.lng,
+        }))
+      : [];
+
+    setWaypoints(loadedWaypoints);
+    setSelectedAlternativeId(null);
+    setFocusedRouteId(route.id);
+    lastSavedFingerprintRef.current = "";
+
+    // Inisialisasi draft rute langsung dari geojson tersimpan agar instan dan tidak kedip
+    if (route.geojson && Array.isArray(route.geojson.coordinates) && route.geojson.coordinates.length >= 2) {
+      const coords = route.geojson.coordinates as [number, number][];
+      setDraftRouteData({
+        success: true,
+        coordinates: coords,
+        leafletPoints: coords.map((c) => [c[1], c[0]]),
+        distanceKm: route.distance_km || 0,
+        durationMin: route.duration_min || 0,
+        streetNames: [],
+        summary: route.name || "",
+        legs: [],
+        alternatives: [],
+      });
+    } else {
+      setDraftRouteData(null);
+    }
+
     setFolderSubTab("add-route");
-    showToast(`Mulai memetakan rute "${trimmed}". Silakan klik titik-titik pada peta.`, "success");
   };
 
   // 8. Filtered & Grouped Data
@@ -490,7 +748,7 @@ export default function DistanceRoutingPage() {
               selectedFolder={selectedFolder}
               allFolderList={allFolderList}
               filteredRoutesCount={filteredRoutes.length}
-              onSetFolderSubTab={setFolderSubTab}
+              onGoBack={handleBackFromEdit}
               routeName={routeName}
               onRouteNameChange={setRouteName}
               targetFolder={targetFolder}
@@ -504,25 +762,30 @@ export default function DistanceRoutingPage() {
               onCustomLineStyleChange={setCustomLineStyle}
               waypoints={waypoints}
               draftRouteData={draftRouteData}
+              selectedAlternativeId={selectedAlternativeId}
+              onSelectAlternativeRoute={(id) => {
+                setSelectedAlternativeId(id);
+                if (id && draftRouteData?.alternatives) {
+                  const alt = draftRouteData.alternatives.find((a) => a.id === id);
+                  if (alt) showToast(`Beralih ke jalur alternatif: ${alt.name}`, "success");
+                } else {
+                  showToast("Kembali ke jalur rute utama", "success");
+                }
+              }}
               isCalculatingRoute={isCalculatingRoute}
               isSaving={isSaving}
-              onSaveRoute={handleSaveRoute}
               onResetWaypoints={handleResetWaypoints}
               onRemoveWaypoint={handleRemoveWaypoint}
               onMoveWaypoint={handleMoveWaypoint}
-              onReverseAllWaypoints={handleReverseAllWaypoints}
-              onAddIntermediatePoint={() => {
-                showToast("Klik titik baru pada peta di sebelah kanan", "success");
-              }}
+              hideWaypointsOnMap={hideWaypointsOnMap}
+              onToggleHideWaypoints={setHideWaypointsOnMap}
             />
           ) : (
             <DaftarRuteFolder
               selectedFolder={selectedFolder}
               filteredRoutes={filteredRoutes}
               focusedRouteId={focusedRouteId}
-              folderSubTab={folderSubTab}
               onBackToAllFolders={handleBackToAllFolders}
-              onSetFolderSubTab={setFolderSubTab}
               onFocusRoute={(id) => setFocusedRouteId(id)}
               onOpenEditRouteModal={(r) => {
                 setEditingRoute({ ...r });
@@ -538,6 +801,7 @@ export default function DistanceRoutingPage() {
               }}
               onOpenDeleteFolderModal={(f) => setDeleteTargetFolder(f)}
               onOpenNewRouteModal={handleOpenNewRouteModal}
+              onEditRouteOnMap={handleEditRouteOnMap}
             />
           )}
         </PanelSamping>
@@ -547,7 +811,18 @@ export default function DistanceRoutingPage() {
           onOpenSidePanel={() => setIsSidePanelOpen(true)}
           routes={routes}
           waypoints={waypoints}
-          draftPathCoordinates={draftRouteData?.leafletPoints || []}
+          draftPathCoordinates={activeDraftLeafletPoints}
+          alternativeRoutes={draftRouteData?.alternatives || []}
+          selectedAlternativeId={selectedAlternativeId}
+          onSelectAlternativeRoute={(id) => {
+            setSelectedAlternativeId(id);
+            if (id && draftRouteData?.alternatives) {
+              const alt = draftRouteData.alternatives.find((a) => a.id === id);
+              if (alt) showToast(`Beralih ke jalur alternatif: ${alt.name}`, "success");
+            } else {
+              showToast("Kembali ke jalur rute utama", "success");
+            }
+          }}
           customColor={customColor}
           customWeight={customWeight}
           customOpacity={customOpacity}
@@ -555,8 +830,12 @@ export default function DistanceRoutingPage() {
           isAddPointMode={selectedFolder !== null && selectedFolder !== "Tanpa Folder" && folderSubTab === "add-route"}
           onMapClickAddWaypoint={handleMapClick}
           onWaypointDragEnd={handleWaypointDragEnd}
+          onRemoveWaypoint={handleRemoveWaypoint}
+          hideWaypointsOnMap={hideWaypointsOnMap}
           basemapId={activeBasemapId}
           focusedRouteId={focusedRouteId}
+          activeRouteId={activeRouteId}
+          isCalculatingRoute={isCalculatingRoute}
           onRouteClick={(r) => setFocusedRouteId(r.id)}
         />
       </div>
@@ -589,6 +868,7 @@ export default function DistanceRoutingPage() {
         onNewRouteNameChange={setNewRouteNameInput}
         onCloseNewRoute={() => setIsNewRouteModalOpen(false)}
         onSubmitNewRoute={handleSubmitNewRoute}
+        isSubmitting={isSaving}
         isDeleteOpen={isDeleteRouteModalOpen}
         targetRoute={routes.find((r) => r.id === deleteTargetRouteId) || null}
         onCloseDelete={() => {

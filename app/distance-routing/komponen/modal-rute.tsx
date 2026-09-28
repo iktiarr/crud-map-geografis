@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Trash2, Edit3, Route, ArrowRight } from "lucide-react";
+import { Trash2, Edit3, Route, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { COLOR_PALETTE } from "../konfigurasi";
 import { TraversedRoadRecord } from "../tipe";
@@ -12,6 +12,7 @@ interface ModalRuteProps {
   onNewRouteNameChange: (val: string) => void;
   onCloseNewRoute: () => void;
   onSubmitNewRoute: (e: React.FormEvent) => void;
+  isSubmitting?: boolean;
 
   // Modal Hapus Rute
   isDeleteOpen: boolean;
@@ -35,6 +36,7 @@ export function ModalRute({
   onNewRouteNameChange,
   onCloseNewRoute,
   onSubmitNewRoute,
+  isSubmitting = false,
   isDeleteOpen,
   targetRoute,
   onCloseDelete,
@@ -85,6 +87,7 @@ export function ModalRute({
                   variant="outline"
                   size="sm"
                   onClick={onCloseNewRoute}
+                  disabled={isSubmitting}
                   className="h-8 text-xs cursor-pointer"
                 >
                   Batal
@@ -92,11 +95,20 @@ export function ModalRute({
                 <Button
                   type="submit"
                   size="sm"
-                  disabled={!newRouteName.trim()}
+                  disabled={!newRouteName.trim() || isSubmitting}
                   className="h-8 text-xs cursor-pointer font-semibold flex items-center gap-1.5"
                 >
-                  <span>Lanjut Petakan di Peta</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Menyimpan...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Lanjut Petakan di Peta</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </>
+                  )}
                 </Button>
               </div>
             </form>

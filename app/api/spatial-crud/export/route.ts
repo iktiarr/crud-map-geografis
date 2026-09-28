@@ -269,7 +269,7 @@ function formatCoords(geometry: any): string {
     const pts = geometry.coordinates;
     const start = pts[0];
     const end = pts[pts.length - 1];
-    return `${pts.length} titik garis (Awal: ${start[1]?.toFixed(4)}, ${start[0]?.toFixed(4)})`;
+    return `${pts.length} titik garis (Awal: ${start[1]?.toFixed(4)}, ${start[0]?.toFixed(4)} ➔ Akhir: ${end[1]?.toFixed(4)}, ${end[0]?.toFixed(4)})`;
   }
   if (type === "Polygon" && Array.isArray(geometry.coordinates)) {
     const ring = geometry.coordinates[0] || [];

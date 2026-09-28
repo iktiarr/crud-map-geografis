@@ -11,6 +11,15 @@ export interface WaypointItem {
   lng: number;
 }
 
+export interface AlternativeRouteOption {
+  id: string;
+  name: string;
+  coordinates: [number, number][]; // [lng, lat]
+  leafletPoints: [number, number][]; // [lat, lng]
+  distanceKm: number;
+  durationMin: number;
+}
+
 export interface MultiPointRouteResult {
   success: boolean;
   coordinates: [number, number][]; // [lng, lat] for GeoJSON
@@ -25,6 +34,7 @@ export interface MultiPointRouteResult {
     distanceKm: number;
     durationMin: number;
   }[];
+  alternatives?: AlternativeRouteOption[];
 }
 
 export interface PresetRoadPoint {
@@ -164,7 +174,7 @@ export async function calculateMultiPointRoadRoute(
 
   const profile = mode === "foot" ? "foot" : mode === "bike" ? "bicycle" : "driving";
   const coordsParam = waypoints.map((p) => `${p.lng},${p.lat}`).join(";");
-  const url = `https://router.project-osrm.org/route/v1/${profile}/${coordsParam}?overview=full&geometries=geojson&steps=true`;
+  const url = `https://router.project-osrm.org/route/v1/${profile}/${coordsParam}?overview=full&geometries=geojson&steps=true&alternatives=true`;
 
   try {
     const controller = new AbortController();
@@ -211,6 +221,40 @@ export async function calculateMultiPointRoadRoute(
       const streetNames = Array.from(streetNamesSet);
       const leafletPoints: [number, number][] = coords.map((c) => [c[1], c[0]]);
 
+      // Parse alternative routes if available
+      const alternatives: AlternativeRouteOption[] = [];
+      if (data.routes.length > 1) {
+        data.routes.slice(1).forEach((altRoute: { geometry: { coordinates: [number, number][] }; distance: number; duration: number; legs?: { steps?: { name?: string }[] }[] }, aIdx: number) => {
+          const altCoords = altRoute.geometry.coordinates;
+          const altLeafletPoints: [number, number][] = altCoords.map((c) => [c[1], c[0]]);
+          const altDist = Number((altRoute.distance / 1000).toFixed(2));
+          const altDur = Math.round(altRoute.duration / 60) || 1;
+          const altNames = new Set<string>();
+          if (altRoute.legs) {
+            altRoute.legs.forEach((l) => {
+              if (l.steps) {
+                l.steps.forEach((s) => {
+                  if (s.name && s.name.trim()) altNames.add(s.name.trim());
+                });
+              }
+            });
+          }
+          const altTitle =
+            altNames.size > 0
+              ? Array.from(altNames).slice(0, 2).join(" ➔ ")
+              : `Jalur Alternatif ${aIdx + 1}`;
+
+          alternatives.push({
+            id: `alt-${aIdx + 1}`,
+            name: altTitle,
+            coordinates: altCoords,
+            leafletPoints: altLeafletPoints,
+            distanceKm: altDist,
+            durationMin: altDur,
+          });
+        });
+      }
+
       return {
         success: true,
         coordinates: coords,
@@ -223,6 +267,7 @@ export async function calculateMultiPointRoadRoute(
             ? streetNames.slice(0, 3).join(" ➔ ")
             : `${waypoints.length} Titik Terhubung`,
         legs,
+        alternatives,
       };
     }
 
@@ -363,3 +408,47 @@ function generateInterpolatedPath(
   }
   return points;
 }
+
+/**
+ * Calculate the best insertion index for a new point among existing waypoints.
+ * Finds the segment (between waypoints[i] and waypoints[i+1]) closest to the given coordinates.
+ */
+export function findBestInsertionIndex(
+  clickLat: number,
+  clickLng: number,
+  waypoints: { lat: number; lng: number }[]
+): number {
+  if (waypoints.length <= 1) return waypoints.length;
+  if (waypoints.length === 2) return 1;
+
+  let bestIndex = 1;
+  let minDistanceSq = Infinity;
+
+  for (let i = 0; i < waypoints.length - 1; i++) {
+    const vLat = waypoints[i].lat;
+    const vLng = waypoints[i].lng;
+    const wLat = waypoints[i + 1].lat;
+    const wLng = waypoints[i + 1].lng;
+
+    const l2 = (vLat - wLat) ** 2 + (vLng - wLng) ** 2;
+    let distSq: number;
+
+    if (l2 === 0) {
+      distSq = (clickLat - vLat) ** 2 + (clickLng - vLng) ** 2;
+    } else {
+      let t = ((clickLat - vLat) * (wLat - vLat) + (clickLng - vLng) * (wLng - vLng)) / l2;
+      t = Math.max(0, Math.min(1, t));
+      const projLat = vLat + t * (wLat - vLat);
+      const projLng = vLng + t * (wLng - vLng);
+      distSq = (clickLat - projLat) ** 2 + (clickLng - projLng) ** 2;
+    }
+
+    if (distSq < minDistanceSq) {
+      minDistanceSq = distSq;
+      bestIndex = i + 1;
+    }
+  }
+
+  return bestIndex;
+}
+

@@ -35,15 +35,17 @@ export function useGeoStorage() {
   }, []);
 
   React.useEffect(() => {
-    setIsLoaded(true);
-    refresh();
-
     const handleStorageUpdate = () => {
       refresh();
     };
 
     window.addEventListener("geostorage-updated", handleStorageUpdate);
     window.addEventListener("storage", handleStorageUpdate);
+
+    queueMicrotask(() => {
+      setIsLoaded(true);
+      refresh();
+    });
 
     return () => {
       window.removeEventListener("geostorage-updated", handleStorageUpdate);
