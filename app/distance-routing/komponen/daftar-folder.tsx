@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Folder, FolderPlus, FolderArchive, MoreVertical, Edit3, Trash2, ChevronRight } from "lucide-react";
+import { Folder, FolderPlus, FolderArchive, MoreVertical, Edit3, Trash2, ChevronRight, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -18,6 +18,7 @@ interface DaftarFolderProps {
   onOpenNewFolderModal: () => void;
   onOpenRenameFolderModal: (folderName: string) => void;
   onOpenDeleteFolderModal: (folderName: string) => void;
+  onViewFolder?: (folderName: string) => void;
 }
 
 export function DaftarFolder({
@@ -28,6 +29,7 @@ export function DaftarFolder({
   onOpenNewFolderModal,
   onOpenRenameFolderModal,
   onOpenDeleteFolderModal,
+  onViewFolder,
 }: DaftarFolderProps) {
   return (
     <div className="space-y-3.5 animate-in fade-in duration-150">
@@ -96,6 +98,19 @@ export function DaftarFolder({
                     <DropdownMenuContent align="end" className="w-36 text-xs">
                       <DropdownMenuItem
                         onClick={() => {
+                          if (onViewFolder) {
+                            onViewFolder(folderName);
+                          } else {
+                            onOpenFolder(folderName);
+                          }
+                        }}
+                        className="cursor-pointer flex items-center gap-2"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-primary" />
+                        <span>Lihat</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
                           const target = folderName;
                           setTimeout(() => onOpenRenameFolderModal(target), 50);
                         }}
@@ -148,7 +163,30 @@ export function DaftarFolder({
             </div>
           </div>
 
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary cursor-pointer transition-colors"
+                title="Opsi Folder"
+              >
+                <MoreVertical className="w-4 h-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-36 text-xs">
+                <DropdownMenuItem
+                  onClick={() => {
+                    if (onViewFolder) {
+                      onViewFolder("Tanpa Folder");
+                    } else {
+                      onOpenFolder("Tanpa Folder");
+                    }
+                  }}
+                  className="cursor-pointer flex items-center gap-2"
+                >
+                  <Eye className="w-3.5 h-3.5 text-primary" />
+                  <span>Lihat</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition-all" />
           </div>
         </div>

@@ -32,7 +32,7 @@ interface PetaRuteProps {
   onOpenSidePanel: () => void;
   routes: TraversedRoadRecord[];
   waypoints: WaypointItem[];
-  draftPathCoordinates: [number, number][];
+  draftPathCoordinates: [number, number][] | [number, number][][];
   alternativeRoutes?: AlternativeRouteOption[];
   selectedAlternativeId?: string | null;
   onSelectAlternativeRoute?: (id: string | null) => void;
@@ -53,10 +53,13 @@ interface PetaRuteProps {
   onCancelInsertMode?: () => void;
   basemapId: string;
   focusedRouteId: number | null;
+  focusedFolder?: string | null;
   activeRouteId?: number | null;
   isCalculatingRoute?: boolean;
   onRouteClick: (route: TraversedRoadRecord) => void;
   onRemoveWaypoint?: (index: number) => void;
+  onToggleDisconnectWaypoint?: (index: number) => void;
+  onConnectWaypointToNearest?: (index: number) => void;
   hideWaypointsOnMap?: boolean;
 }
 
@@ -81,10 +84,13 @@ export function PetaRute({
   onCancelInsertMode,
   basemapId,
   focusedRouteId,
+  focusedFolder,
   activeRouteId,
   isCalculatingRoute,
   onRouteClick,
   onRemoveWaypoint,
+  onToggleDisconnectWaypoint,
+  onConnectWaypointToNearest,
   hideWaypointsOnMap,
 }: PetaRuteProps) {
   return (
@@ -118,12 +124,15 @@ export function PetaRute({
         onMapClickAddPoint={onMapClickAddWaypoint}
         onWaypointDragEnd={onWaypointDragEnd}
         onRemoveWaypoint={onRemoveWaypoint}
+        onToggleDisconnectWaypoint={onToggleDisconnectWaypoint}
+        onConnectWaypointToNearest={onConnectWaypointToNearest}
         hideWaypointsOnMap={hideWaypointsOnMap}
         onRouteLineClick={onRouteLineClick}
         insertModeInfo={insertModeInfo}
         onCancelInsertMode={onCancelInsertMode}
         activeBasemapId={basemapId}
         focusedRouteId={focusedRouteId}
+        focusedFolder={focusedFolder}
         activeRouteId={activeRouteId}
         isCalculatingRoute={isCalculatingRoute}
         onSelectRoute={onRouteClick}

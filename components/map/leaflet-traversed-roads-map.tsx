@@ -7,7 +7,7 @@ import {
   WaypointItem,
   AlternativeRouteOption,
 } from "@/lib/road-routing";
-import { Trash2, Loader2 } from "lucide-react";
+import { Trash2, Loader2, GitFork, Link2, Unlink, Check } from "lucide-react";
 
 export interface TraversedRoadRecord {
   id: number;
@@ -31,7 +31,7 @@ export interface TraversedRoadRecord {
   description?: string;
   geojson?: {
     type: string;
-    coordinates: [number, number][]; // [lng, lat]
+    coordinates: [number, number][] | [number, number][][]; // [lng, lat] LineString atau MultiLineString
   };
   created_at?: string;
   updated_at?: string;
@@ -44,7 +44,7 @@ export interface LeafletTraversedRoadsMapProps {
 
   // Multi-point waypoints for active/draft route
   waypoints: WaypointItem[];
-  draftPathCoordinates: [number, number][]; // [lat, lng] for Leaflet
+  draftPathCoordinates: [number, number][] | [number, number][][]; // [lat, lng] for Leaflet
   alternativeRoutes?: AlternativeRouteOption[];
   selectedAlternativeId?: string | null;
   onSelectAlternativeRoute?: (id: string | null) => void;
@@ -63,8 +63,11 @@ export interface LeafletTraversedRoadsMapProps {
   onSelectRoute?: (route: TraversedRoadRecord) => void;
   onDeleteRoute?: (id: number) => void;
   onRemoveWaypoint?: (index: number) => void;
+  onToggleDisconnectWaypoint?: (index: number) => void;
+  onConnectWaypointToNearest?: (index: number) => void;
   hideWaypointsOnMap?: boolean;
   focusedRouteId?: number | null;
+  focusedFolder?: string | null;
   activeRouteId?: number | null;
   isCalculatingRoute?: boolean;
 
@@ -97,11 +100,14 @@ export function LeafletTraversedRoadsMap({
   onMapClickAddPoint,
   onWaypointDragEnd,
   onRemoveWaypoint,
+  onToggleDisconnectWaypoint,
+  onConnectWaypointToNearest,
   hideWaypointsOnMap = false,
   onRouteLineClick,
   onSelectRoute,
   onDeleteRoute,
   focusedRouteId,
+  focusedFolder,
   activeRouteId = null,
   isCalculatingRoute = false,
   insertModeInfo,
@@ -119,6 +125,7 @@ export function LeafletTraversedRoadsMap({
   const draftRouteLayerGroupRef = React.useRef<LType.FeatureGroup | null>(null);
   const alternativeRoutesLayerGroupRef = React.useRef<LType.FeatureGroup | null>(null);
   const waypointsLayerGroupRef = React.useRef<LType.FeatureGroup | null>(null);
+  const routePolylineMapRef = React.useRef<Map<number, LType.Polyline>>(new Map());
 
   const [L, setL] = React.useState<typeof LType | null>(null);
 
@@ -167,6 +174,8 @@ export function LeafletTraversedRoadsMap({
     onMapClickAddPoint,
     onWaypointDragEnd,
     onRemoveWaypoint,
+    onToggleDisconnectWaypoint,
+    onConnectWaypointToNearest,
     onRouteLineClick,
     onSelectAlternativeRoute,
     onSelectRoute,
@@ -180,6 +189,8 @@ export function LeafletTraversedRoadsMap({
       onMapClickAddPoint,
       onWaypointDragEnd,
       onRemoveWaypoint,
+      onToggleDisconnectWaypoint,
+      onConnectWaypointToNearest,
       onRouteLineClick,
       onSelectAlternativeRoute,
       onSelectRoute,
@@ -289,16 +300,28 @@ export function LeafletTraversedRoadsMap({
     if (!L || !mapInstanceRef.current || !savedRoutesLayerGroupRef.current) return;
     const group = savedRoutesLayerGroupRef.current;
     group.clearLayers();
+    routePolylineMapRef.current.clear();
 
     routes.forEach((route) => {
       if (route.isVisible === false) return;
       // Jangan gambar rute tersimpan jika rute ini sedang diedit aktif di layer draft
       if (activeRouteId && route.id === activeRouteId) return;
 
-      let latlngs: [number, number][] = [];
+      let latlngs: LType.LatLngExpression[] | LType.LatLngExpression[][] = [];
 
-      if (route.geojson && Array.isArray(route.geojson.coordinates)) {
-        latlngs = route.geojson.coordinates.map((c: [number, number]) => [c[1], c[0]]);
+      if (route.geojson && Array.isArray(route.geojson.coordinates) && route.geojson.coordinates.length > 0) {
+        const firstElem = route.geojson.coordinates[0];
+        const isMulti =
+          route.geojson.type === "MultiLineString" ||
+          (Array.isArray(firstElem) && Array.isArray((firstElem as unknown as [number, number])[0]));
+
+        if (isMulti) {
+          latlngs = (route.geojson.coordinates as [number, number][][]).map((seg) =>
+            seg.map((c) => [c[1], c[0]] as [number, number])
+          );
+        } else {
+          latlngs = (route.geojson.coordinates as [number, number][]).map((c) => [c[1], c[0]] as [number, number]);
+        }
       } else if (route.origin_lat && route.destination_lat) {
         latlngs = [
           [route.origin_lat, route.origin_lng],
@@ -306,7 +329,7 @@ export function LeafletTraversedRoadsMap({
         ];
       }
 
-      if (latlngs.length < 2) return;
+      if (!latlngs || latlngs.length === 0) return;
 
       const isFocused = focusedRouteId === route.id;
       const routeColor = route.color || "#2563eb";
@@ -399,6 +422,7 @@ export function LeafletTraversedRoadsMap({
         callbacksRef.current.onSelectRoute?.(route);
       });
 
+      routePolylineMapRef.current.set(route.id, mainPolyline);
       group.addLayer(mainPolyline);
     });
   }, [L, routes, focusedRouteId, activeRouteId]);
@@ -409,12 +433,25 @@ export function LeafletTraversedRoadsMap({
     const group = draftRouteLayerGroupRef.current;
     group.clearLayers();
 
-    if (draftPathCoordinates.length < 2) return;
+    if (!draftPathCoordinates || draftPathCoordinates.length === 0) return;
+
+    const isMultiSegment =
+      Array.isArray(draftPathCoordinates[0]) &&
+      Array.isArray((draftPathCoordinates[0] as unknown as [number, number])[0]);
+
+    if (!isMultiSegment && draftPathCoordinates.length < 2) return;
+    if (
+      isMultiSegment &&
+      (draftPathCoordinates as [number, number][][]).every((seg) => !seg || seg.length < 2)
+    )
+      return;
 
     const dash = isCalculatingRoute ? "6, 8" : getDashArray(customLineStyle);
 
+    const draftCoords = draftPathCoordinates as LType.LatLngExpression[] | LType.LatLngExpression[][];
+
     // Glowing underlay
-    const glowPolyline = L.polyline(draftPathCoordinates, {
+    const glowPolyline = L.polyline(draftCoords, {
       color: customColor,
       weight: customWeight + 6,
       opacity: isCalculatingRoute ? 0.15 : 0.35,
@@ -425,7 +462,7 @@ export function LeafletTraversedRoadsMap({
     group.addLayer(glowPolyline);
 
     // Main draft line
-    const draftPolyline = L.polyline(draftPathCoordinates, {
+    const draftPolyline = L.polyline(draftCoords, {
       color: customColor,
       weight: customWeight,
       opacity: isCalculatingRoute ? 0.45 : customOpacity,
@@ -520,23 +557,53 @@ export function LeafletTraversedRoadsMap({
     waypoints.forEach((wp, index) => {
       const isStart = index === 0;
       const isEnd = index === waypoints.length - 1 && waypoints.length > 1;
+      const isBranch = wp.connectionType === "nearest_branch";
+      const isDisconnected = wp.connectionType === "disconnected" || wp.isDisconnected;
       const pointNumber = index + 1;
 
-      // Color badge based on position: Start (Emerald), Intermediate (Sky Blue), End (Rose)
-      const bgColor = isStart ? "bg-emerald-500" : isEnd ? "bg-rose-500" : "bg-sky-500";
-      const ringColor = isStart ? "ring-emerald-500/30" : isEnd ? "ring-rose-500/30" : "ring-sky-500/30";
-      const arrowBg = isStart ? "bg-emerald-600" : isEnd ? "bg-rose-600" : "bg-sky-600";
+      // Color badge: Branch T (Teal), Disconnected (Amber), Start (Emerald), End (Rose), Intermediate (Sky Blue)
+      const bgColor = isBranch
+        ? "bg-teal-600"
+        : isDisconnected
+        ? "bg-amber-600"
+        : isStart
+        ? "bg-emerald-500"
+        : isEnd
+        ? "bg-rose-500"
+        : "bg-sky-500";
+
+      const ringColor = isBranch
+        ? "ring-teal-500/30"
+        : isDisconnected
+        ? "ring-amber-500/30"
+        : isStart
+        ? "ring-emerald-500/30"
+        : isEnd
+        ? "ring-rose-500/30"
+        : "ring-sky-500/30";
+
+      const arrowBg = isBranch
+        ? "bg-teal-700"
+        : isDisconnected
+        ? "bg-amber-700"
+        : isStart
+        ? "bg-emerald-600"
+        : isEnd
+        ? "bg-rose-600"
+        : "bg-sky-600";
+
+      const typeBadgeText = isBranch ? " (Cabang T)" : isDisconnected ? " (Jalan Lain)" : "";
 
       const wpIcon = L.divIcon({
         className: "custom-waypoint-marker",
         html: `
           <div class="relative group cursor-grab active:cursor-grabbing">
             <div class="w-8 h-8 rounded-full ${bgColor} text-white font-bold text-xs flex items-center justify-center shadow-lg ring-4 ${ringColor} transition-transform transform group-hover:scale-110">
-              ${pointNumber}
+              ${isBranch ? "T" : pointNumber}
             </div>
             <div class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 ${arrowBg} rotate-45"></div>
             <span class="absolute top-9 left-1/2 -translate-x-1/2 whitespace-nowrap bg-background/95 backdrop-blur border border-border text-[10px] font-medium px-2 py-0.5 rounded shadow text-foreground pointer-events-none max-w-32.5 truncate block text-center">
-              Titik ${pointNumber}: ${wp.name || "Titik Rute"}
+              Titik ${pointNumber}: ${wp.name || "Titik Rute"}${typeBadgeText}
             </span>
           </div>
         `,
@@ -547,7 +614,7 @@ export function LeafletTraversedRoadsMap({
       const marker = L.marker([wp.lat, wp.lng], {
         icon: wpIcon,
         draggable: true,
-        title: `Titik ${pointNumber}: ${wp.name || ""} (Klik kanan untuk menghapus)`,
+        title: `Titik ${pointNumber}: ${wp.name || ""} (Klik kanan untuk opsi cabang/pisah)`,
       });
 
       marker.on("dragend", (e: LType.DragEndEvent) => {
@@ -570,10 +637,16 @@ export function LeafletTraversedRoadsMap({
       });
 
       marker.bindPopup(`
-        <div class="p-1 text-xs">
-          <strong>Titik ${pointNumber} ${isStart ? "(Awal)" : isEnd ? "(Tujuan Akhir)" : "(Pemberhentian)"}</strong><br />
-          <span class="font-medium">${wp.name || "Titik Jalan"}</span><br />
-          <span class="text-[10px] text-muted-foreground block mt-1">💡 Klik kanan pada pin untuk menghapus titik</span>
+        <div class="p-1 text-xs space-y-1">
+          <div class="font-bold flex items-center gap-1.5">
+            <span>Titik ${pointNumber} ${isStart ? "(Awal)" : isEnd ? "(Tujuan Akhir)" : ""}</span>
+            ${isBranch ? '<span class="px-1.5 py-0.5 rounded bg-teal-500/20 text-teal-700 dark:text-teal-400 text-[10px] font-semibold">Cabang T</span>' : ""}
+            ${isDisconnected ? '<span class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-700 dark:text-amber-400 text-[10px] font-semibold">Jalan Terpisah</span>' : ""}
+          </div>
+          <div class="font-medium">${wp.name || "Titik Jalan"}</div>
+          <div class="text-[10px] text-muted-foreground pt-1 border-t border-border/50">
+            💡 Klik kanan pin untuk opsi Cabang T / Buat Jalan Lain / Hapus
+          </div>
         </div>
       `);
 
@@ -592,14 +665,36 @@ export function LeafletTraversedRoadsMap({
         // Cek koordinat geojson rute
         const coords = targetRoute.geojson?.coordinates;
         if (Array.isArray(coords) && coords.length > 0) {
-          const validPoints = coords
-            .filter((c) => Array.isArray(c) && c.length >= 2 && !isNaN(c[0]) && !isNaN(c[1]) && !(c[0] === 0 && c[1] === 0))
+          const firstElem = coords[0];
+          const isMulti =
+            targetRoute.geojson?.type === "MultiLineString" ||
+            (Array.isArray(firstElem) && Array.isArray((firstElem as unknown as [number, number])[0]));
+
+          const flatCoords = isMulti
+            ? (coords as [number, number][][]).flat()
+            : (coords as [number, number][]);
+
+          const validPoints = flatCoords
+            .filter(
+              (c) =>
+                Array.isArray(c) &&
+                c.length >= 2 &&
+                !isNaN(c[0]) &&
+                !isNaN(c[1]) &&
+                !(c[0] === 0 && c[1] === 0)
+            )
             .map((c) => [c[1], c[0]] as [number, number]);
 
           if (validPoints.length > 0) {
             const bounds = L.latLngBounds(validPoints);
             if (bounds.isValid()) {
               map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
+              const poly = routePolylineMapRef.current.get(focusedRouteId);
+              if (poly) {
+                setTimeout(() => {
+                  poly.openPopup();
+                }, 200);
+              }
               return;
             }
           }
@@ -615,6 +710,12 @@ export function LeafletTraversedRoadsMap({
             const bounds = L.latLngBounds(validWaypoints);
             if (bounds.isValid()) {
               map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
+              const poly = routePolylineMapRef.current.get(focusedRouteId);
+              if (poly) {
+                setTimeout(() => {
+                  poly.openPopup();
+                }, 200);
+              }
               return;
             }
           }
@@ -631,6 +732,57 @@ export function LeafletTraversedRoadsMap({
       }
     }
   }, [L, focusedRouteId, routes]);
+
+  // Fit bounds when focusedFolder changes
+  React.useEffect(() => {
+    if (!L || !mapInstanceRef.current || !focusedFolder) return;
+    const map = mapInstanceRef.current;
+
+    const folderRoutes = routes.filter(
+      (r) => (r.folder_name || "Tanpa Folder").toLowerCase() === focusedFolder.toLowerCase()
+    );
+
+    if (folderRoutes.length === 0) return;
+
+    const allPoints: [number, number][] = [];
+    folderRoutes.forEach((route) => {
+      const coords = route.geojson?.coordinates;
+      if (Array.isArray(coords) && coords.length > 0) {
+        const isMulti =
+          route.geojson?.type === "MultiLineString" ||
+          (Array.isArray(coords[0]) && Array.isArray((coords as unknown[][])[0][0]));
+
+        const flatCoords = isMulti
+          ? (coords as [number, number][][]).flat()
+          : (coords as [number, number][]);
+
+        flatCoords.forEach((c) => {
+          if (
+            Array.isArray(c) &&
+            c.length >= 2 &&
+            !isNaN(c[0]) &&
+            !isNaN(c[1]) &&
+            !(c[0] === 0 && c[1] === 0)
+          ) {
+            allPoints.push([c[1], c[0]]);
+          }
+        });
+      } else if (Array.isArray(route.waypoints) && route.waypoints.length > 0) {
+        route.waypoints.forEach((w) => {
+          if (w && !isNaN(w.lat) && !isNaN(w.lng) && !(w.lat === 0 && w.lng === 0)) {
+            allPoints.push([w.lat, w.lng]);
+          }
+        });
+      }
+    });
+
+    if (allPoints.length > 0) {
+      const bounds = L.latLngBounds(allPoints);
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
+      }
+    }
+  }, [L, focusedFolder, routes]);
 
   return (
     <div className={`relative bg-background overflow-hidden ${className}`}>
@@ -677,19 +829,83 @@ export function LeafletTraversedRoadsMap({
           <div
             style={{
               position: "fixed",
-              left: `${Math.min(waypointContextMenu.x + 4, typeof window !== "undefined" ? window.innerWidth - 220 : 500)}px`,
-              top: `${Math.min(waypointContextMenu.y + 4, typeof window !== "undefined" ? window.innerHeight - 120 : 500)}px`,
+              left: `${Math.min(waypointContextMenu.x + 4, typeof window !== "undefined" ? window.innerWidth - 260 : 500)}px`,
+              top: `${Math.min(waypointContextMenu.y + 4, typeof window !== "undefined" ? window.innerHeight - 200 : 500)}px`,
             }}
-            className="z-9999 min-w-48 rounded-xl border border-border bg-popover/95 p-1.5 text-popover-foreground shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 select-none"
+            className="z-9999 min-w-56 rounded-xl border border-border bg-popover/95 p-1.5 text-popover-foreground shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 select-none"
           >
-            <div className="px-2.5 py-1.5 mb-1 text-[11px] font-semibold text-muted-foreground border-b border-border/60 flex items-center gap-2">
-              <span className="w-4 h-4 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[10px] font-bold shrink-0">
-                {waypointContextMenu.index + 1}
-              </span>
-              <span className="truncate text-foreground font-medium">
-                {waypointContextMenu.wp.name || `Titik ${waypointContextMenu.index + 1}`}
-              </span>
+            <div className="px-2.5 py-1.5 mb-1 text-[11px] font-semibold text-muted-foreground border-b border-border/60 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 truncate">
+                <span className="w-4 h-4 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[10px] font-bold shrink-0">
+                  {waypointContextMenu.index + 1}
+                </span>
+                <span className="truncate text-foreground font-medium">
+                  {waypointContextMenu.wp.name || `Titik ${waypointContextMenu.index + 1}`}
+                </span>
+              </div>
             </div>
+
+            {/* Opsi khusus titik ke-2 dst (bukan titik awal) */}
+            {waypointContextMenu.index > 0 && (
+              <div className="space-y-0.5 mb-1 border-b border-border/60 pb-1">
+                {/* Opsi 1: Hubungkan ke Rute Terdekat (Huruf T) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const idx = waypointContextMenu.index;
+                    setWaypointContextMenu(null);
+                    callbacksRef.current.onConnectWaypointToNearest?.(idx);
+                  }}
+                  className={`w-full flex items-center justify-between px-2 py-1.5 text-xs rounded-lg cursor-pointer transition-colors text-left ${
+                    waypointContextMenu.wp.connectionType === "nearest_branch"
+                      ? "bg-teal-500/15 text-teal-700 dark:text-teal-300 font-semibold"
+                      : "text-foreground hover:bg-secondary/80 font-medium"
+                  }`}
+                  title="Hubungkan titik ini langsung ke jalan terdekat pada rute utama (membentuk huruf T)"
+                >
+                  <div className="flex items-center gap-2">
+                    <GitFork className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
+                    <span>Hubungkan Rute Terdekat (Huruf T)</span>
+                  </div>
+                  {waypointContextMenu.wp.connectionType === "nearest_branch" && (
+                    <Check className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
+                  )}
+                </button>
+
+                {/* Opsi 2: Buat Jalan Lain (Pisah Rute) / Sambungkan Kembali */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const idx = waypointContextMenu.index;
+                    setWaypointContextMenu(null);
+                    callbacksRef.current.onToggleDisconnectWaypoint?.(idx);
+                  }}
+                  className={`w-full flex items-center justify-between px-2 py-1.5 text-xs rounded-lg cursor-pointer transition-colors text-left ${
+                    waypointContextMenu.wp.connectionType === "disconnected" || waypointContextMenu.wp.isDisconnected
+                      ? "bg-amber-500/15 text-amber-700 dark:text-amber-300 font-semibold"
+                      : "text-foreground hover:bg-secondary/80 font-medium"
+                  }`}
+                  title="Putus hubungan dengan titik sebelumnya tanpa membuat jalur memutar"
+                >
+                  <div className="flex items-center gap-2">
+                    {waypointContextMenu.wp.connectionType === "disconnected" || waypointContextMenu.wp.isDisconnected ? (
+                      <>
+                        <Link2 className="w-3.5 h-3.5 text-primary shrink-0" />
+                        <span>Sambungkan ke Titik Sebelumnya</span>
+                      </>
+                    ) : (
+                      <>
+                        <Unlink className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                        <span>Buat Jalan Lain (Pisah Rute)</span>
+                      </>
+                    )}
+                  </div>
+                  {(waypointContextMenu.wp.connectionType === "disconnected" || waypointContextMenu.wp.isDisconnected) && (
+                    <Check className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                  )}
+                </button>
+              </div>
+            )}
 
             <button
               type="button"

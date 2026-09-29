@@ -5,10 +5,13 @@
  */
 
 export interface WaypointItem {
-  id: string;
-  name: string;
+  id?: string;
+  name?: string;
   lat: number;
   lng: number;
+  isDisconnected?: boolean; // Jika true, titik ini memutus jalur dengan titik sebelumnya (jalan lain)
+  connectionType?: "sequential" | "disconnected" | "nearest_branch"; // tipe hubungan rute
+  branchTargetCoord?: [number, number]; // Koordinat sambungan cabang [lat, lng]
 }
 
 export interface AlternativeRouteOption {
@@ -22,8 +25,8 @@ export interface AlternativeRouteOption {
 
 export interface MultiPointRouteResult {
   success: boolean;
-  coordinates: [number, number][]; // [lng, lat] for GeoJSON
-  leafletPoints: [number, number][]; // [lat, lng] for Leaflet
+  coordinates: [number, number][] | [number, number][][]; // [lng, lat] for GeoJSON LineString / MultiLineString
+  leafletPoints: [number, number][] | [number, number][][]; // [lat, lng] for Leaflet
   distanceKm: number;
   durationMin: number;
   streetNames: string[];
@@ -33,6 +36,7 @@ export interface MultiPointRouteResult {
     toName?: string;
     distanceKm: number;
     durationMin: number;
+    isBranch?: boolean;
   }[];
   alternatives?: AlternativeRouteOption[];
 }
@@ -153,27 +157,84 @@ export const PRESET_ROAD_POINTS: PresetRoadPoint[] = [
 
 
 /**
- * Multi-point road route calculation (Connects 2 or more waypoints)
+ * Cari koordinat terdekat pada suatu jalur rute (untuk membentuk cabang persimpangan huruf T)
  */
-export async function calculateMultiPointRoadRoute(
-  waypoints: { lat: number; lng: number; name?: string }[],
+export function findNearestCoordinateOnPath(
+  targetLat: number,
+  targetLng: number,
+  pathCoords: [number, number][] // [lat, lng]
+): [number, number] {
+  if (pathCoords.length === 0) return [targetLat, targetLng];
+  let minDistance = Infinity;
+  let nearestPoint: [number, number] = pathCoords[0];
+
+  for (let i = 0; i < pathCoords.length - 1; i++) {
+    const p1 = pathCoords[i];
+    const p2 = pathCoords[i + 1];
+
+    // Cek titik puncak vertex p1
+    const d1 = calculateHaversine(targetLat, targetLng, p1[0], p1[1]);
+    if (d1 < minDistance) {
+      minDistance = d1;
+      nearestPoint = p1;
+    }
+
+    // Cek proyeksi ortogonal tegak lurus pada ruas garis p1 -> p2
+    const dx = p2[1] - p1[1];
+    const dy = p2[0] - p1[0];
+    if (dx !== 0 || dy !== 0) {
+      const t = Math.max(
+        0,
+        Math.min(1, ((targetLng - p1[1]) * dx + (targetLat - p1[0]) * dy) / (dx * dx + dy * dy))
+      );
+      const projLat = p1[0] + t * dy;
+      const projLng = p1[1] + t * dx;
+      const dProj = calculateHaversine(targetLat, targetLng, projLat, projLng);
+      if (dProj < minDistance) {
+        minDistance = dProj;
+        nearestPoint = [projLat, projLng];
+      }
+    }
+  }
+
+  // Cek titik puncak vertex terakhir
+  const pLast = pathCoords[pathCoords.length - 1];
+  const dLast = calculateHaversine(targetLat, targetLng, pLast[0], pLast[1]);
+  if (dLast < minDistance) {
+    nearestPoint = pLast;
+  }
+
+  return nearestPoint;
+}
+
+/**
+ * Helper untuk query OSRM pada 1 segmen rute jalan
+ */
+async function queryOsrmSingleSegment(
+  points: { lat: number; lng: number; name?: string }[],
   mode: "driving" | "bike" | "foot" = "driving"
-): Promise<MultiPointRouteResult> {
-  if (waypoints.length < 2) {
+): Promise<{
+  coords: [number, number][];
+  leafletPoints: [number, number][];
+  distanceKm: number;
+  durationMin: number;
+  streetNames: string[];
+  legs: MultiPointRouteResult["legs"];
+  alternatives?: AlternativeRouteOption[];
+}> {
+  if (points.length < 2) {
     return {
-      success: false,
-      coordinates: [],
+      coords: [],
       leafletPoints: [],
       distanceKm: 0,
       durationMin: 0,
       streetNames: [],
-      summary: "Memerlukan minimal 2 titik untuk perutean jalan",
       legs: [],
     };
   }
 
   const profile = mode === "foot" ? "foot" : mode === "bike" ? "bicycle" : "driving";
-  const coordsParam = waypoints.map((p) => `${p.lng},${p.lat}`).join(";");
+  const coordsParam = points.map((p) => `${p.lng},${p.lat}`).join(";");
   const url = `https://router.project-osrm.org/route/v1/${profile}/${coordsParam}?overview=full&geometries=geojson&steps=true&alternatives=true`;
 
   try {
@@ -195,15 +256,14 @@ export async function calculateMultiPointRoadRoute(
       const distanceKm = Number((route.distance / 1000).toFixed(2));
       const durationMin = Math.round(route.duration / 60) || 1;
 
-      // Extract street names
       const streetNamesSet = new Set<string>();
       const legs: MultiPointRouteResult["legs"] = [];
 
       if (route.legs && Array.isArray(route.legs)) {
         route.legs.forEach((leg: { distance: number; duration: number; steps?: { name?: string }[] }, idx: number) => {
           legs.push({
-            fromName: waypoints[idx]?.name || `Titik ${idx + 1}`,
-            toName: waypoints[idx + 1]?.name || `Titik ${idx + 2}`,
+            fromName: points[idx]?.name || `Titik ${idx + 1}`,
+            toName: points[idx + 1]?.name || `Titik ${idx + 2}`,
             distanceKm: Number((leg.distance / 1000).toFixed(2)),
             durationMin: Math.round(leg.duration / 60) || 1,
           });
@@ -221,7 +281,6 @@ export async function calculateMultiPointRoadRoute(
       const streetNames = Array.from(streetNamesSet);
       const leafletPoints: [number, number][] = coords.map((c) => [c[1], c[0]]);
 
-      // Parse alternative routes if available
       const alternatives: AlternativeRouteOption[] = [];
       if (data.routes.length > 1) {
         data.routes.slice(1).forEach((altRoute: { geometry: { coordinates: [number, number][] }; distance: number; duration: number; legs?: { steps?: { name?: string }[] }[] }, aIdx: number) => {
@@ -256,33 +315,26 @@ export async function calculateMultiPointRoadRoute(
       }
 
       return {
-        success: true,
-        coordinates: coords,
+        coords,
         leafletPoints,
         distanceKm,
         durationMin,
         streetNames,
-        summary:
-          streetNames.length > 0
-            ? streetNames.slice(0, 3).join(" ➔ ")
-            : `${waypoints.length} Titik Terhubung`,
         legs,
         alternatives,
       };
     }
 
-    throw new Error("No multi-point route found in OSRM response");
+    throw new Error("No route found in OSRM response");
   } catch (err) {
-    console.warn("OSRM multi-point routing failed, fallback to sequential curves:", err);
-
-    // Fallback: connect points sequentially
+    console.warn("OSRM single segment routing fallback:", err);
     const fallbackLeafletPoints: [number, number][] = [];
     let totalDist = 0;
     const legs: MultiPointRouteResult["legs"] = [];
 
-    for (let i = 0; i < waypoints.length - 1; i++) {
-      const p1 = waypoints[i];
-      const p2 = waypoints[i + 1];
+    for (let i = 0; i < points.length - 1; i++) {
+      const p1 = points[i];
+      const p2 = points[i + 1];
       const segmentPoints = generateInterpolatedPath(p1.lat, p1.lng, p2.lat, p2.lng, 10);
       const segDist = calculateHaversine(p1.lat, p1.lng, p2.lat, p2.lng);
       totalDist += segDist;
@@ -302,14 +354,214 @@ export async function calculateMultiPointRoadRoute(
     }
 
     return {
-      success: true,
-      coordinates: fallbackLeafletPoints.map((c) => [c[1], c[0]]),
+      coords: fallbackLeafletPoints.map((c) => [c[1], c[0]]),
       leafletPoints: fallbackLeafletPoints,
       distanceKm: Number(totalDist.toFixed(2)),
       durationMin: Math.max(1, Math.round((totalDist / 35) * 60)),
       streetNames: [],
-      summary: `${waypoints.length} Titik Terhubung (Mode Cadangan)`,
       legs,
+    };
+  }
+}
+
+/**
+ * Multi-point road route calculation
+ * Mendukung titik sambung berurutan, titik rute terpisah (buat jalan lain), dan cabang ke rute terdekat (persimpangan huruf T)
+ */
+export async function calculateMultiPointRoadRoute(
+  waypoints: WaypointItem[],
+  mode: "driving" | "bike" | "foot" = "driving"
+): Promise<MultiPointRouteResult> {
+  if (waypoints.length < 2) {
+    return {
+      success: false,
+      coordinates: [],
+      leafletPoints: [],
+      distanceKm: 0,
+      durationMin: 0,
+      streetNames: [],
+      summary: "Memerlukan minimal 2 titik untuk perutean jalan",
+      legs: [],
+    };
+  }
+
+  // Cek apakah ada titik yang dipisah (jalan lain) atau cabang rute terdekat
+  const hasBranchOrDisconnect = waypoints.some(
+    (w, idx) =>
+      idx > 0 &&
+      (w.isDisconnected ||
+        w.connectionType === "disconnected" ||
+        w.connectionType === "nearest_branch")
+  );
+
+  // Jika semua titik normal berurutan, jalankan query OSRM tunggal
+  if (!hasBranchOrDisconnect) {
+    try {
+      const res = await queryOsrmSingleSegment(waypoints, mode);
+      return {
+        success: true,
+        coordinates: res.coords,
+        leafletPoints: res.leafletPoints,
+        distanceKm: res.distanceKm,
+        durationMin: res.durationMin,
+        streetNames: res.streetNames,
+        summary:
+          res.streetNames.length > 0
+            ? res.streetNames.slice(0, 3).join(" ➔ ")
+            : `${waypoints.length} Titik Terhubung`,
+        legs: res.legs,
+        alternatives: res.alternatives,
+      };
+    } catch (err) {
+      console.error("Gagal kalkulasi rute normal:", err);
+    }
+  }
+
+  // Multi-segment & Branching (Pisah Rute / Cabang Huruf T)
+  try {
+    interface SegmentPlan {
+      points: WaypointItem[];
+      isBranch?: boolean;
+    }
+
+    const segmentPlans: SegmentPlan[] = [];
+    let currentGroup: WaypointItem[] = [waypoints[0]];
+
+    for (let i = 1; i < waypoints.length; i++) {
+      const wp = waypoints[i];
+      const isDisc = wp.connectionType === "disconnected" || wp.isDisconnected;
+      const isBranch = wp.connectionType === "nearest_branch";
+
+      if (isBranch) {
+        if (currentGroup.length >= 2) {
+          segmentPlans.push({ points: [...currentGroup] });
+        }
+        // Tandai segmen cabang
+        segmentPlans.push({ points: [wp], isBranch: true });
+        currentGroup = [wp];
+      } else if (isDisc) {
+        if (currentGroup.length >= 2) {
+          segmentPlans.push({ points: [...currentGroup] });
+        }
+        // Titik ini memulai jalan lain / segmen baru
+        currentGroup = [wp];
+      } else {
+        currentGroup.push(wp);
+      }
+    }
+
+    if (currentGroup.length >= 2) {
+      segmentPlans.push({ points: [...currentGroup] });
+    }
+
+    const calculatedSegments: {
+      coords: [number, number][];
+      leafletPoints: [number, number][];
+      distanceKm: number;
+      durationMin: number;
+      streetNames: string[];
+      legs: MultiPointRouteResult["legs"];
+    }[] = [];
+
+    const accumulatedLeafletPoints: [number, number][] = [];
+
+    for (let sIdx = 0; sIdx < segmentPlans.length; sIdx++) {
+      const plan = segmentPlans[sIdx];
+
+      if (plan.isBranch) {
+        // Cabang Huruf T: hubungkan titik target ke koordinat terdekat pada rute yang sudah dihitung
+        const targetWp = plan.points[0];
+        let branchOrigin: [number, number] = [waypoints[0].lat, waypoints[0].lng];
+
+        if (accumulatedLeafletPoints.length > 0) {
+          branchOrigin = findNearestCoordinateOnPath(
+            targetWp.lat,
+            targetWp.lng,
+            accumulatedLeafletPoints
+          );
+        }
+
+        const branchPoints = [
+          {
+            id: `junction-${sIdx}`,
+            name: "Simpang Rute Terdekat",
+            lat: branchOrigin[0],
+            lng: branchOrigin[1],
+          },
+          targetWp,
+        ];
+
+        const segRes = await queryOsrmSingleSegment(branchPoints, mode);
+        if (segRes.leafletPoints.length >= 2) {
+          accumulatedLeafletPoints.push(...segRes.leafletPoints);
+          calculatedSegments.push({
+            ...segRes,
+            legs: segRes.legs.map((l) => ({ ...l, isBranch: true })),
+          });
+        }
+      } else if (plan.points.length >= 2) {
+        const segRes = await queryOsrmSingleSegment(plan.points, mode);
+        if (segRes.leafletPoints.length >= 2) {
+          accumulatedLeafletPoints.push(...segRes.leafletPoints);
+          calculatedSegments.push(segRes);
+        }
+      }
+    }
+
+    if (calculatedSegments.length === 0) {
+      return {
+        success: false,
+        coordinates: [],
+        leafletPoints: [],
+        distanceKm: 0,
+        durationMin: 0,
+        streetNames: [],
+        summary: "Tidak ada segmen rute jalan yang valid",
+        legs: [],
+      };
+    }
+
+    let totalDist = 0;
+    let totalDur = 0;
+    const combinedStreetNames = new Set<string>();
+    const combinedLegs: MultiPointRouteResult["legs"] = [];
+
+    calculatedSegments.forEach((seg) => {
+      totalDist += seg.distanceKm;
+      totalDur += seg.durationMin;
+      seg.streetNames.forEach((n) => combinedStreetNames.add(n));
+      combinedLegs.push(...seg.legs);
+    });
+
+    const isSingleSeg = calculatedSegments.length === 1;
+    const finalCoordinates = isSingleSeg
+      ? calculatedSegments[0].coords
+      : calculatedSegments.map((s) => s.coords);
+    const finalLeafletPoints = isSingleSeg
+      ? calculatedSegments[0].leafletPoints
+      : calculatedSegments.map((s) => s.leafletPoints);
+
+    return {
+      success: true,
+      coordinates: finalCoordinates,
+      leafletPoints: finalLeafletPoints,
+      distanceKm: Number(totalDist.toFixed(2)),
+      durationMin: totalDur,
+      streetNames: Array.from(combinedStreetNames),
+      summary: `${waypoints.length} Titik (${calculatedSegments.length} Jalur & Cabang)`,
+      legs: combinedLegs,
+    };
+  } catch (err) {
+    console.error("Gagal kalkulasi multi-segment/branching:", err);
+    return {
+      success: false,
+      coordinates: [],
+      leafletPoints: [],
+      distanceKm: 0,
+      durationMin: 0,
+      streetNames: [],
+      summary: "Gagal menghitung jalur rute",
+      legs: [],
     };
   }
 }

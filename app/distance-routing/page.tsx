@@ -52,6 +52,7 @@ export default function DistanceRoutingPage() {
   // State Peta & Basemap
   const [activeBasemapId, setActiveBasemapId] = React.useState(DEFAULT_ROUTE_CONFIG.basemapId);
   const [focusedRouteId, setFocusedRouteId] = React.useState<number | null>(null);
+  const [focusedFolder, setFocusedFolder] = React.useState<string | null>(null);
 
   // State Waypoint & Kalkulasi Rute
   const [waypoints, setWaypoints] = React.useState<WaypointItem[]>([]);
@@ -89,7 +90,7 @@ export default function DistanceRoutingPage() {
     travelMode: DEFAULT_ROUTE_CONFIG.travelMode as TravelMode,
     routeCategory: DEFAULT_ROUTE_CONFIG.category,
     waypoints: [] as WaypointItem[],
-    activeDraftCoordinates: [] as [number, number][],
+    activeDraftCoordinates: [] as [number, number][] | [number, number][][],
     activeDraftDistanceKm: 0,
     activeDraftDurationMin: 0,
   });
@@ -206,12 +207,20 @@ export default function DistanceRoutingPage() {
     const origin = s.waypoints[0];
     const destination = s.waypoints[s.waypoints.length - 1];
 
-    const coordinates: [number, number][] =
+    const isMultiLine =
+      Array.isArray(s.activeDraftCoordinates) &&
+      s.activeDraftCoordinates.length > 0 &&
+      Array.isArray(s.activeDraftCoordinates[0]) &&
+      Array.isArray((s.activeDraftCoordinates as unknown[][])[0][0]);
+
+    const coordinates: [number, number][] | [number, number][][] =
       s.activeDraftCoordinates.length > 0
         ? s.activeDraftCoordinates
         : s.waypoints.length >= 2
         ? s.waypoints.map((w) => [w.lng, w.lat] as [number, number])
         : [];
+
+    const geojsonType = isMultiLine ? "MultiLineString" : "LineString";
 
     const payload: Partial<TraversedRoadRecord> = {
       name: s.routeName.trim() || (origin && destination ? `${origin.name} ➔ ${destination.name}` : "Rute Baru"),
@@ -222,7 +231,15 @@ export default function DistanceRoutingPage() {
       destination_name: destination?.name || "Belum ditentukan",
       destination_lat: destination?.lat || 0,
       destination_lng: destination?.lng || 0,
-      waypoints: s.waypoints.map((w, idx) => ({ id: w.id || `wp-${idx}`, name: w.name, lat: w.lat, lng: w.lng })),
+      waypoints: s.waypoints.map((w, idx) => ({
+        id: w.id || `wp-${idx}`,
+        name: w.name,
+        lat: w.lat,
+        lng: w.lng,
+        isDisconnected: w.isDisconnected,
+        connectionType: w.connectionType,
+        branchTargetCoord: w.branchTargetCoord,
+      })),
       distance_km: s.activeDraftDistanceKm,
       duration_min: s.activeDraftDurationMin,
       color: s.customColor,
@@ -232,7 +249,7 @@ export default function DistanceRoutingPage() {
       travel_mode: s.travelMode,
       category: s.routeCategory,
       geojson: {
-        type: "LineString",
+        type: geojsonType,
         coordinates,
       },
     };
@@ -244,7 +261,7 @@ export default function DistanceRoutingPage() {
       origin_name: payload.origin_name,
       destination_name: payload.destination_name,
       waypointsCount: s.waypoints.length,
-      waypoints: s.waypoints.map((w) => [w.lat, w.lng]),
+      waypoints: s.waypoints.map((w) => [w.lat, w.lng, w.connectionType, w.isDisconnected]),
       coordsCount: coordinates.length,
       distanceKm: s.activeDraftDistanceKm,
       durationMin: s.activeDraftDurationMin,
@@ -270,7 +287,7 @@ export default function DistanceRoutingPage() {
                   ...r,
                   ...payload,
                   geojson: {
-                    type: "LineString",
+                    type: geojsonType,
                     coordinates,
                   },
                   distance_km: s.activeDraftDistanceKm,
@@ -280,6 +297,9 @@ export default function DistanceRoutingPage() {
                     name: w.name,
                     lat: w.lat,
                     lng: w.lng,
+                    isDisconnected: w.isDisconnected,
+                    connectionType: w.connectionType,
+                    branchTargetCoord: w.branchTargetCoord,
                   })),
                 }
               : r
@@ -325,9 +345,17 @@ export default function DistanceRoutingPage() {
     flushSave,
   ]);
 
-  // Kunci koordinat titik untuk mencegah OSRM terpanggil berulang saat hanya nama jalan yang di-reverse-geocode
+  // Kunci koordinat titik & tipe sambungan jalan untuk mencegah kalkulasi OSRM berlebih
   const waypointsCoordKey = React.useMemo(
-    () => waypoints.map((w) => `${w.lat.toFixed(6)},${w.lng.toFixed(6)}`).join("|"),
+    () =>
+      waypoints
+        .map(
+          (w) =>
+            `${w.lat.toFixed(6)},${w.lng.toFixed(6)},${w.connectionType || "seq"},${
+              w.isDisconnected ? "disc" : "conn"
+            }`
+        )
+        .join("|"),
     [waypoints]
   );
 
@@ -417,16 +445,89 @@ export default function DistanceRoutingPage() {
     });
   };
 
+  // Buat Jalan Lain (Pisah Rute): Titik tidak akan dihubungkan ke titik sebelumnya
+  const handleToggleDisconnectWaypoint = (index: number) => {
+    if (index <= 0) return;
+    setIsCalculatingRoute(true);
+    setWaypoints((prev) =>
+      prev.map((p, idx) => {
+        if (idx !== index) return p;
+        const willDisconnect = !(p.connectionType === "disconnected" || p.isDisconnected);
+        return {
+          ...p,
+          connectionType: willDisconnect ? "disconnected" : "sequential",
+          isDisconnected: willDisconnect,
+          branchTargetCoord: undefined,
+        };
+      })
+    );
+    const targetWp = waypoints[index];
+    const willDisconnect = !(targetWp?.connectionType === "disconnected" || targetWp?.isDisconnected);
+    showToast(
+      willDisconnect
+        ? `Titik ${index + 1} dipisahkan menjadi jalan baru`
+        : `Titik ${index + 1} disambungkan kembali`,
+      "success"
+    );
+  };
+
+  // Hubungkan Rute Terdekat (Cabang Huruf T): Hubungkan titik ke jalan terdekat yang sudah dirute
+  const handleConnectWaypointToNearest = (index: number) => {
+    if (index <= 0) return;
+    setIsCalculatingRoute(true);
+    setWaypoints((prev) =>
+      prev.map((p, idx) => {
+        if (idx !== index) return p;
+        const willBranch = p.connectionType !== "nearest_branch";
+        return {
+          ...p,
+          connectionType: willBranch ? "nearest_branch" : "sequential",
+          isDisconnected: false,
+          branchTargetCoord: undefined,
+        };
+      })
+    );
+    const targetWp = waypoints[index];
+    const willBranch = targetWp?.connectionType !== "nearest_branch";
+    showToast(
+      willBranch
+        ? `Titik ${index + 1} dihubungkan ke rute terdekat (Cabang T)`
+        : `Titik ${index + 1} dikembalikan ke rute berurutan`,
+      "success"
+    );
+  };
+
   // 4. Operasi Buka & Tutup Folder
   const handleOpenFolder = (folderName: string) => {
     setSelectedFolder(folderName);
     setTargetFolder(folderName);
+    setFocusedFolder(folderName);
+    setFocusedRouteId(null);
     setFolderSubTab("routes-list");
   };
 
   const handleBackToAllFolders = () => {
     setSelectedFolder(null);
+    setFocusedFolder(null);
+    setFocusedRouteId(null);
     setFolderSubTab("routes-list");
+  };
+
+  const handleViewFolder = (folderName: string) => {
+    setSelectedFolder(folderName);
+    setTargetFolder(folderName);
+    setFocusedFolder(folderName);
+    setFocusedRouteId(null);
+    setFolderSubTab("routes-list");
+    showToast(`Melihat rute di folder "${folderName}"`, "success");
+  };
+
+  const handleFocusRoute = (routeId: number) => {
+    setFocusedRouteId(routeId);
+    const target = routes.find((r) => r.id === routeId);
+    if (target) {
+      showToast(`Melihat rute: ${target.name}`, "success");
+    }
   };
 
   // Navigasi Kembali dari Mode Pemetaan / Edit: Otomatis Simpan & Kembali ke Daftar
@@ -637,6 +738,9 @@ export default function DistanceRoutingPage() {
           name: wp.name || `Titik ${idx + 1}`,
           lat: wp.lat,
           lng: wp.lng,
+          isDisconnected: wp.isDisconnected,
+          connectionType: wp.connectionType,
+          branchTargetCoord: wp.branchTargetCoord,
         }))
       : [];
 
@@ -646,12 +750,22 @@ export default function DistanceRoutingPage() {
     lastSavedFingerprintRef.current = "";
 
     // Inisialisasi draft rute langsung dari geojson tersimpan agar instan dan tidak kedip
-    if (route.geojson && Array.isArray(route.geojson.coordinates) && route.geojson.coordinates.length >= 2) {
-      const coords = route.geojson.coordinates as [number, number][];
+    if (route.geojson && Array.isArray(route.geojson.coordinates) && route.geojson.coordinates.length > 0) {
+      const coords = route.geojson.coordinates;
+      const isMulti =
+        route.geojson.type === "MultiLineString" ||
+        (Array.isArray(coords[0]) && Array.isArray((coords as unknown[][])[0][0]));
+
+      const leafletPoints = isMulti
+        ? (coords as unknown as [number, number][][]).map((segment) =>
+            segment.map((c) => [c[1], c[0]] as [number, number])
+          )
+        : (coords as [number, number][]).map((c) => [c[1], c[0]] as [number, number]);
+
       setDraftRouteData({
         success: true,
         coordinates: coords,
-        leafletPoints: coords.map((c) => [c[1], c[0]]),
+        leafletPoints,
         distanceKm: route.distance_km || 0,
         durationMin: route.duration_min || 0,
         streetNames: [],
@@ -736,6 +850,7 @@ export default function DistanceRoutingPage() {
               routes={routes}
               unassignedRoutes={unassignedRoutes}
               onOpenFolder={handleOpenFolder}
+              onViewFolder={handleViewFolder}
               onOpenNewFolderModal={() => setIsNewFolderModalOpen(true)}
               onOpenRenameFolderModal={(f) => {
                 setRenameTargetFolder(f);
@@ -777,6 +892,8 @@ export default function DistanceRoutingPage() {
               onResetWaypoints={handleResetWaypoints}
               onRemoveWaypoint={handleRemoveWaypoint}
               onMoveWaypoint={handleMoveWaypoint}
+              onToggleDisconnectWaypoint={handleToggleDisconnectWaypoint}
+              onConnectWaypointToNearest={handleConnectWaypointToNearest}
               hideWaypointsOnMap={hideWaypointsOnMap}
               onToggleHideWaypoints={setHideWaypointsOnMap}
             />
@@ -786,7 +903,7 @@ export default function DistanceRoutingPage() {
               filteredRoutes={filteredRoutes}
               focusedRouteId={focusedRouteId}
               onBackToAllFolders={handleBackToAllFolders}
-              onFocusRoute={(id) => setFocusedRouteId(id)}
+              onFocusRoute={handleFocusRoute}
               onOpenEditRouteModal={(r) => {
                 setEditingRoute({ ...r });
                 setIsEditingRouteModalOpen(true);
@@ -809,7 +926,7 @@ export default function DistanceRoutingPage() {
         <PetaRute
           isSidePanelOpen={isSidePanelOpen}
           onOpenSidePanel={() => setIsSidePanelOpen(true)}
-          routes={routes}
+          routes={selectedFolder ? filteredRoutes : routes}
           waypoints={waypoints}
           draftPathCoordinates={activeDraftLeafletPoints}
           alternativeRoutes={draftRouteData?.alternatives || []}
@@ -831,9 +948,12 @@ export default function DistanceRoutingPage() {
           onMapClickAddWaypoint={handleMapClick}
           onWaypointDragEnd={handleWaypointDragEnd}
           onRemoveWaypoint={handleRemoveWaypoint}
+          onToggleDisconnectWaypoint={handleToggleDisconnectWaypoint}
+          onConnectWaypointToNearest={handleConnectWaypointToNearest}
           hideWaypointsOnMap={hideWaypointsOnMap}
           basemapId={activeBasemapId}
           focusedRouteId={focusedRouteId}
+          focusedFolder={focusedFolder}
           activeRouteId={activeRouteId}
           isCalculatingRoute={isCalculatingRoute}
           onRouteClick={(r) => setFocusedRouteId(r.id)}

@@ -6,6 +6,7 @@ import {
   Route,
   Plus,
   MoreVertical,
+  Eye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -152,6 +153,13 @@ export function DaftarRuteFolder({
                       <MoreVertical className="w-3.5 h-3.5" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-36 text-xs">
+                      <DropdownMenuItem
+                        onClick={() => onFocusRoute(r.id)}
+                        className="cursor-pointer flex items-center gap-2"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-primary" />
+                        <span>Lihat</span>
+                      </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => {
                           if (onEditRouteOnMap) {

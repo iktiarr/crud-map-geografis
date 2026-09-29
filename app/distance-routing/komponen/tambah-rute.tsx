@@ -13,6 +13,9 @@ import {
   Folder,
   ChevronDown,
   Settings,
+  GitFork,
+  Link2,
+  Unlink,
 } from "lucide-react";
 import {
   Accordion,
@@ -68,6 +71,8 @@ interface TambahRuteProps {
   onAddIntermediatePoint?: () => void;
   hideWaypointsOnMap?: boolean;
   onToggleHideWaypoints?: (val: boolean) => void;
+  onToggleDisconnectWaypoint?: (index: number) => void;
+  onConnectWaypointToNearest?: (index: number) => void;
 }
 
 export function TambahRute({
@@ -94,18 +99,11 @@ export function TambahRute({
   onResetWaypoints,
   onRemoveWaypoint,
   onMoveWaypoint,
+  onToggleDisconnectWaypoint,
+  onConnectWaypointToNearest,
   hideWaypointsOnMap = false,
   onToggleHideWaypoints,
 }: TambahRuteProps) {
-  // Hitung metrik rute aktif (baik rute utama maupun jalur alternatif terpilih)
-  const activeAlternative = React.useMemo(() => {
-    if (!selectedAlternativeId || !draftRouteData?.alternatives) return null;
-    return draftRouteData.alternatives.find((a) => a.id === selectedAlternativeId) || null;
-  }, [selectedAlternativeId, draftRouteData]);
-
-  const displayDistance = activeAlternative ? activeAlternative.distanceKm : draftRouteData?.distanceKm || 0;
-  const displayDuration = activeAlternative ? activeAlternative.durationMin : draftRouteData?.durationMin || 0;
-
   // State Dropdown Kustom untuk Mencegah Pergeseran Posisi Item
   const [isFolderMenuOpen, setIsFolderMenuOpen] = React.useState(false);
   const [isLineStyleMenuOpen, setIsLineStyleMenuOpen] = React.useState(false);
@@ -442,11 +440,6 @@ export function TambahRute({
                 <Route className="w-3.5 h-3.5 text-primary" />
                 <span>Daftar Titik Jalan Terhubung</span>
               </div>
-              {draftRouteData && waypoints.length >= 2 && (
-                <span className="text-xs font-mono font-bold text-primary">
-                  {displayDistance} km
-                </span>
-              )}
             </div>
           </AccordionTrigger>
 
@@ -497,8 +490,20 @@ export function TambahRute({
                               {isOrigin ? "1" : isDestination ? "N" : `${idx + 1}`}
                             </span>
                             <div className="min-w-0 flex-1">
-                              <div className="font-semibold text-foreground truncate text-[11px]">
-                                {wp.name}
+                              <div className="font-semibold text-foreground truncate text-[11px] flex items-center gap-1.5">
+                                <span className="truncate">{wp.name}</span>
+                                {wp.connectionType === "nearest_branch" && (
+                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 text-[9px] font-medium rounded bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 shrink-0">
+                                    <GitFork className="w-2.5 h-2.5" />
+                                    Cabang T
+                                  </span>
+                                )}
+                                {(wp.connectionType === "disconnected" || wp.isDisconnected) && (
+                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 text-[9px] font-medium rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0">
+                                    <Unlink className="w-2.5 h-2.5" />
+                                    Jalan Lain
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -534,10 +539,50 @@ export function TambahRute({
                         </div>
                       </ContextMenuTrigger>
 
-                      <ContextMenuContent className="w-48">
+                      <ContextMenuContent className="w-56">
                         <div className="px-2.5 py-1.5 text-[11px] font-semibold text-muted-foreground border-b border-border/50">
                           Titik {idx + 1}: {wp.name}
                         </div>
+
+                        {idx > 0 && onConnectWaypointToNearest && (
+                          <ContextMenuItem
+                            onClick={() => onConnectWaypointToNearest(idx)}
+                            className="cursor-pointer text-xs flex items-center justify-between"
+                          >
+                            <span className="flex items-center">
+                              <GitFork className="w-3.5 h-3.5 mr-2 text-teal-600 dark:text-teal-400" />
+                              Hubungkan Rute Terdekat (Huruf T)
+                            </span>
+                            {wp.connectionType === "nearest_branch" && (
+                              <Check className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
+                            )}
+                          </ContextMenuItem>
+                        )}
+
+                        {idx > 0 && onToggleDisconnectWaypoint && (
+                          <ContextMenuItem
+                            onClick={() => onToggleDisconnectWaypoint(idx)}
+                            className="cursor-pointer text-xs flex items-center justify-between"
+                          >
+                            <span className="flex items-center">
+                              {wp.connectionType === "disconnected" || wp.isDisconnected ? (
+                                <>
+                                  <Link2 className="w-3.5 h-3.5 mr-2 text-primary" />
+                                  Sambungkan ke Titik Sebelumnya
+                                </>
+                              ) : (
+                                <>
+                                  <Unlink className="w-3.5 h-3.5 mr-2 text-amber-600 dark:text-amber-400" />
+                                  Buat Jalan Lain (Pisah Rute)
+                                </>
+                              )}
+                            </span>
+                            {(wp.connectionType === "disconnected" || wp.isDisconnected) && (
+                              <Check className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                            )}
+                          </ContextMenuItem>
+                        )}
+
                         <ContextMenuItem
                           variant="destructive"
                           onClick={() => onRemoveWaypoint(idx)}
@@ -637,27 +682,6 @@ export function TambahRute({
             )}
 
             {/* Ringkasan Jarak & Estimasi */}
-            {draftRouteData && waypoints.length >= 2 && (
-              <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 space-y-1 text-xs">
-                <div className="flex items-center justify-between font-bold text-foreground">
-                  <span className="flex items-center gap-1">
-                    <span>Total Jarak Rute:</span>
-                    {selectedAlternativeId && (
-                      <span className="text-[10px] font-normal text-amber-600 dark:text-amber-400">(Jalur Alternatif)</span>
-                    )}
-                  </span>
-                  <span className="text-primary font-mono text-sm">
-                    {displayDistance} km
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                  <span>Estimasi Durasi Perjalanan:</span>
-                  <span className="font-mono text-foreground font-semibold">
-                    ~{displayDuration} menit
-                  </span>
-                </div>
-              </div>
-            )}
 
             {isCalculatingRoute && (
               <div className="p-2.5 rounded-lg bg-secondary/50 border border-border text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
