@@ -73,7 +73,6 @@ export function LeafletGlobalMap({
       zoomSnap: 1,
       zoomDelta: 1,
       wheelPxPerZoomLevel: 120,
-      preferCanvas: true,
       trackResize: true,
     });
 

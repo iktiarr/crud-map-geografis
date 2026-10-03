@@ -27,6 +27,13 @@ interface ModalRuteProps {
   onEditingRouteChange: (updated: TraversedRoadRecord) => void;
   onCloseEdit: () => void;
   onSubmitEdit: () => void;
+
+  // Modal Ubah Nama Rute (Cepat & Sederhana)
+  renameTargetRoute?: TraversedRoadRecord | null;
+  renameRouteNewName?: string;
+  onRenameRouteNewNameChange?: (val: string) => void;
+  onCloseRenameRoute?: () => void;
+  onSubmitRenameRoute?: (e: React.FormEvent) => void;
 }
 
 export function ModalRute({
@@ -47,9 +54,68 @@ export function ModalRute({
   onEditingRouteChange,
   onCloseEdit,
   onSubmitEdit,
+  renameTargetRoute,
+  renameRouteNewName,
+  onRenameRouteNewNameChange,
+  onCloseRenameRoute,
+  onSubmitRenameRoute,
 }: ModalRuteProps) {
   return (
     <>
+      {/* MODAL UBAH NAMA RUTE CEPAT */}
+      {renameTargetRoute && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-xl max-w-sm w-full p-5 space-y-4 shadow-2xl animate-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/15 text-primary flex items-center justify-center shrink-0">
+                <Edit3 className="w-5 h-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-bold text-sm text-foreground">Ubah Nama Rute</h3>
+                <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                  Rute: {renameTargetRoute.name}
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={onSubmitRenameRoute} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground block">
+                  Nama Baru Rute:
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  value={renameRouteNewName || ""}
+                  onChange={(e) => onRenameRouteNewNameChange?.(e.target.value)}
+                  placeholder="Ketik nama rute baru..."
+                  className="w-full h-9 px-3 rounded-lg bg-background border border-border text-foreground text-xs font-medium focus:ring-1 focus:ring-primary focus:outline-hidden"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-1 border-t border-border">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={onCloseRenameRoute}
+                  className="h-8 text-xs cursor-pointer"
+                >
+                  Batal
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={!renameRouteNewName?.trim()}
+                  className="h-8 text-xs cursor-pointer font-semibold"
+                >
+                  Simpan Perubahan
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       {/* MODAL 0: Tambah Rute Baru (Input Nama Rute) */}
       {isNewRouteOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">

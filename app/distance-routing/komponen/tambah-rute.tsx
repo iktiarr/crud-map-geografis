@@ -13,9 +13,14 @@ import {
   Folder,
   ChevronDown,
   Settings,
-  GitFork,
   Link2,
   Unlink,
+  Eye,
+  MoreVertical,
+  Edit3,
+  X,
+  Share2,
+  Navigation,
 } from "lucide-react";
 import {
   Accordion,
@@ -29,11 +34,22 @@ import {
   ContextMenuTrigger,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSeparator,
 } from "@/components/ui/context-menu";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import {
   WaypointItem,
   MultiPointRouteResult,
   LineStyle,
+  ConnectionMode,
+  MarkerStyle,
+  getLetterLabel,
 } from "../tipe";
 
 interface TambahRuteProps {
@@ -42,7 +58,7 @@ interface TambahRuteProps {
   filteredRoutesCount?: number;
   onGoBack: () => void;
 
-  // Form Kustomisasi Garis
+  // Form Kustomisasi Garis & Titik
   routeName: string;
   onRouteNameChange: (val: string) => void;
   targetFolder: string;
@@ -54,6 +70,12 @@ interface TambahRuteProps {
   customOpacity: number;
   customLineStyle: LineStyle;
   onCustomLineStyleChange: (val: LineStyle) => void;
+  markerStyle: MarkerStyle;
+  onMarkerStyleChange: (val: MarkerStyle) => void;
+
+  // Pengaturan Hubungkan Titik
+  connectionMode: ConnectionMode;
+  onConnectionModeChange: (val: ConnectionMode) => void;
 
   // Waypoints & Simpan
   waypoints: WaypointItem[];
@@ -73,10 +95,12 @@ interface TambahRuteProps {
   onToggleHideWaypoints?: (val: boolean) => void;
   onToggleDisconnectWaypoint?: (index: number) => void;
   onConnectWaypointToNearest?: (index: number) => void;
+  onFocusWaypoint?: (lat: number, lng: number) => void;
+  onZoomToRoute?: () => void;
+  onUpdateWaypointName?: (index: number, newName: string) => void;
 }
 
 export function TambahRute({
-  selectedFolder,
   allFolderList,
   onGoBack,
   routeName,
@@ -90,12 +114,15 @@ export function TambahRute({
   customOpacity,
   customLineStyle,
   onCustomLineStyleChange,
+  markerStyle = "numbers",
+  onMarkerStyleChange,
+  connectionMode = "sequential",
+  onConnectionModeChange,
   waypoints,
   draftRouteData,
   selectedAlternativeId = null,
   onSelectAlternativeRoute,
   isCalculatingRoute,
-  isSaving,
   onResetWaypoints,
   onRemoveWaypoint,
   onMoveWaypoint,
@@ -103,7 +130,27 @@ export function TambahRute({
   onConnectWaypointToNearest,
   hideWaypointsOnMap = false,
   onToggleHideWaypoints,
+  onFocusWaypoint,
+  onZoomToRoute,
+  onUpdateWaypointName,
 }: TambahRuteProps) {
+  // State Edit Nama Titik
+  const [editingWpIndex, setEditingWpIndex] = React.useState<number | null>(null);
+  const [editingWpName, setEditingWpName] = React.useState("");
+
+  const startEditWaypoint = (index: number, currentName: string) => {
+    setEditingWpIndex(index);
+    setEditingWpName(currentName);
+  };
+
+  const saveEditWaypoint = (index: number) => {
+    const trimmed = editingWpName.trim();
+    if (trimmed) {
+      onUpdateWaypointName?.(index, trimmed);
+    }
+    setEditingWpIndex(null);
+  };
+
   // State Dropdown Kustom untuk Mencegah Pergeseran Posisi Item
   const [isFolderMenuOpen, setIsFolderMenuOpen] = React.useState(false);
   const [isLineStyleMenuOpen, setIsLineStyleMenuOpen] = React.useState(false);
@@ -126,32 +173,37 @@ export function TambahRute({
 
   return (
     <div className="space-y-3.5 animate-in fade-in duration-150">
-      {/* Navigasi Atas: Tombol Kembali & Indikator Simpan */}
-      <div className="flex items-center justify-between gap-2 pb-2 border-b border-border">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onGoBack}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-secondary text-foreground text-xs font-medium cursor-pointer transition-colors"
-            title="Kembali ke daftar rute"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Kembali</span>
-          </button>
+      {/* Navigasi Atas: Tombol Kembali */}
+      <div className="flex items-center pb-2 border-b border-border">
+        <button
+          type="button"
+          onClick={onGoBack}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-secondary text-foreground text-xs font-medium cursor-pointer transition-colors"
+          title="Kembali ke daftar rute"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          <span>Kembali</span>
+        </button>
+      </div>
 
-          {isSaving && (
-            <div className="flex items-center gap-1.5 px-2 py-1 text-xs font-sans">
-              <span className="flex items-center gap-1.5 text-primary text-[11px] font-medium">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                <span>Menyimpan...</span>
-              </span>
-            </div>
-          )}
+      {/* Edit Nama Rute Cepat */}
+      <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl border border-border bg-card shadow-2xs group focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all">
+        <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+          <Edit3 className="w-3.5 h-3.5" />
         </div>
-
-        <span className="text-[11px] text-muted-foreground font-mono truncate max-w-32.5" title={selectedFolder}>
-          Folder: <strong className="text-foreground">{selectedFolder}</strong>
-        </span>
+        <div className="flex-1 min-w-0">
+          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">
+            Nama Rute
+          </label>
+          <input
+            type="text"
+            value={routeName}
+            onChange={(e) => onRouteNameChange(e.target.value)}
+            placeholder="Ketik nama rute..."
+            className="w-full bg-transparent border-0 p-0 text-xs font-semibold text-foreground focus:outline-hidden focus:ring-0 placeholder:text-muted-foreground/50"
+            title="Ubah nama rute langsung di sini"
+          />
+        </div>
       </div>
 
 
@@ -390,11 +442,90 @@ export function TambahRute({
                 </div>
               </div>
             </div>
+
+            {/* Baris 4: Gaya Ikon Penanda Titik (Penomoran, Huruf, Dot Polos, Ikon Pin) */}
+            <div className="space-y-1.5 pt-2 border-t border-border/50">
+              <div className="flex items-center justify-between text-[11px] font-semibold text-foreground">
+                <span>Gaya Ikon Titik:</span>
+                <span className="text-[10px] text-primary font-medium">
+                  {markerStyle === "numbers" && "Angka (1, 2, 3)"}
+                  {markerStyle === "letters" && "Huruf (A, B, C)"}
+                  {markerStyle === "none" && "Tanpa Ikon (None - Hanya Klik Peta)"}
+                  {markerStyle === "icon" && "Ikon Penanda (Pin)"}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-4 gap-1.5">
+                {[
+                  {
+                    id: "numbers" as MarkerStyle,
+                    label: "Angka",
+                    sub: "1, 2, 3",
+                    renderPreview: () => (
+                      <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground font-bold text-[10px] flex items-center justify-center shadow-2xs">
+                        1
+                      </span>
+                    ),
+                  },
+                  {
+                    id: "letters" as MarkerStyle,
+                    label: "Huruf",
+                    sub: "A, B, C",
+                    renderPreview: () => (
+                      <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground font-bold text-[10px] flex items-center justify-center shadow-2xs">
+                        A
+                      </span>
+                    ),
+                  },
+                  {
+                    id: "none" as MarkerStyle,
+                    label: "None",
+                    sub: "Hanya Klik",
+                    renderPreview: () => (
+                      <span className="w-4 h-4 rounded-full border border-dashed border-primary flex items-center justify-center text-[9px] text-primary font-bold">
+                        ✕
+                      </span>
+                    ),
+                  },
+                  {
+                    id: "icon" as MarkerStyle,
+                    label: "Pin",
+                    sub: "Ikon Lokasi",
+                    renderPreview: () => (
+                      <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-2xs">
+                        <MapPin className="w-3 h-3" />
+                      </span>
+                    ),
+                  },
+                ].map((item) => {
+                  const isSelected = markerStyle === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => onMarkerStyleChange?.(item.id)}
+                      className={`p-2 rounded-lg border text-center transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                        isSelected
+                          ? "bg-primary/10 border-primary ring-1 ring-primary/40 text-primary font-semibold shadow-xs"
+                          : "bg-background border-border hover:bg-secondary/70 text-muted-foreground hover:text-foreground"
+                      }`}
+                      title={item.id === "none" ? "Tanpa ikon: Hanya klik di peta untuk menghubungkan jalan tanpa pin yang menutupi jalan" : `Pilih gaya penanda: ${item.label} (${item.sub})`}
+                    >
+                      {item.renderPreview()}
+                      <div className="leading-tight">
+                        <div className="text-[11px] font-medium leading-none">{item.label}</div>
+                        <div className="text-[9px] text-muted-foreground/80 leading-none mt-0.5">{item.sub}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </AccordionContent>
 
         </AccordionItem>
 
-        {/* ACCORDION PENGATURAN: PENGATURAN TAMPILAN PETA */}
+        {/* ACCORDION PENGATURAN: OPSI HUBUNGKAN & TAMPILAN PETA */}
         <AccordionItem
           value="pengaturan"
           className="rounded-xl border border-border bg-card shadow-2xs overflow-hidden"
@@ -406,8 +537,77 @@ export function TambahRute({
             </div>
           </AccordionTrigger>
 
-          <AccordionContent className="px-3.5 pb-3.5 pt-1 space-y-3">
-            <div className="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-border bg-secondary/30 hover:border-border transition-colors">
+          <AccordionContent className="px-3.5 pb-3.5 pt-1 space-y-3.5">
+            {/* OPSI HUBUNGKAN TITIK JALAN */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold text-foreground uppercase tracking-wider block">
+                  Opsi Hubungkan Titik Jalan
+                </label>
+                <span className="text-[10px] text-primary font-medium">Pilih salah satu</span>
+              </div>
+
+              <div className="space-y-1.5">
+                {[
+                  {
+                    id: "sequential" as ConnectionMode,
+                    title: "Hubungkan Sesuai Urutan",
+                    desc: "Titik dihubungkan berurutan 1 ➔ 2 ➔ 3... mengikuti lekukan jalan dan mencegah putar balik.",
+                    icon: <Route className="w-4 h-4 text-primary shrink-0" />,
+                    badge: "Sesuai Urutan",
+                  },
+                  {
+                    id: "nearest" as ConnectionMode,
+                    title: "Hubungkan Semua Jalan (Jalur Terdekat)",
+                    desc: "Otomatis menyambungkan ke titik atau jalur terdekat untuk mencegah rute melompat jauh.",
+                    icon: <Share2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />,
+                    badge: "Terdekat / Efisien",
+                  },
+                  {
+                    id: "direct_line" as ConnectionMode,
+                    title: "Jalur Fleksibel (Ikuti Jalan & Gang)",
+                    desc: "Mengikuti lekukan jalan dan gang tanpa terhalang rambu/larangan putar balik satu arah. Selalu nyambung langsung.",
+                    icon: <Navigation className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />,
+                    badge: "Gang & Jalan",
+                  },
+                ].map((item) => {
+                  const isSelected = connectionMode === item.id;
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => onConnectionModeChange?.(item.id)}
+                      className={`p-2.5 rounded-lg border text-xs cursor-pointer transition-all flex items-start gap-2.5 ${
+                        isSelected
+                          ? "bg-primary/10 border-primary ring-1 ring-primary/40 text-foreground shadow-2xs"
+                          : "bg-secondary/30 border-border hover:bg-secondary/60 text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <div className="pt-0.5">{item.icon}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span className={`text-[11px] font-semibold ${isSelected ? "text-foreground font-bold" : "text-foreground/90"}`}>
+                            {item.title}
+                          </span>
+                          <span className={`text-[9px] px-1.5 py-0.2 rounded font-medium shrink-0 ${
+                            isSelected
+                              ? "bg-primary text-primary-foreground font-semibold"
+                              : "bg-muted text-muted-foreground"
+                          }`}>
+                            {item.badge}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground leading-snug mt-0.5">
+                          {item.desc}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* SWITCH SEMBUNYIKAN TITIK */}
+            <div className="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-border bg-secondary/30 hover:border-primary/40 transition-colors">
               <div className="space-y-0.5 min-w-0 pr-2">
                 <label
                   htmlFor="hide-waypoints-switch"
@@ -444,18 +644,30 @@ export function TambahRute({
           </AccordionTrigger>
 
           <AccordionContent className="px-3.5 pb-3.5 pt-1 space-y-3">
-            {waypoints.length >= 2 && (
-              <div className="flex items-center justify-end pb-1 border-b border-border/60">
+            <div className="flex items-center justify-between pb-1 border-b border-border/60">
+              {onZoomToRoute && (
+                <button
+                  type="button"
+                  onClick={onZoomToRoute}
+                  disabled={waypoints.length === 0}
+                  className="text-[10px] text-primary hover:underline flex items-center gap-1 cursor-pointer transition-colors font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="Zoom ke seluruh rute jalan di peta"
+                >
+                  <Eye className="w-3 h-3" />
+                  <span>Lihat Rute di Peta</span>
+                </button>
+              )}
+              {waypoints.length >= 2 && (
                 <button
                   type="button"
                   onClick={onResetWaypoints}
-                  className="text-[10px] text-destructive hover:underline flex items-center gap-1 cursor-pointer transition-colors"
+                  className="text-[10px] text-destructive hover:underline flex items-center gap-1 cursor-pointer transition-colors ml-auto"
                 >
                   <RotateCcw className="w-3 h-3" />
                   <span>Reset Titik</span>
                 </button>
-              </div>
-            )}
+              )}
+            </div>
 
             {waypoints.length === 0 ? (
               <div className="py-6 text-center text-xs text-muted-foreground border border-dashed border-border rounded-xl p-4 space-y-2 bg-secondary/20">
@@ -470,6 +682,81 @@ export function TambahRute({
                 {waypoints.map((wp, idx) => {
                   const isOrigin = idx === 0;
                   const isDestination = idx === waypoints.length - 1 && waypoints.length > 1;
+                  const isEditing = editingWpIndex === idx;
+                  const isBranch = wp.connectionType === "nearest_branch";
+
+                  const badgeText = markerStyle === "letters"
+                    ? getLetterLabel(idx)
+                    : markerStyle === "none"
+                    ? ""
+                    : markerStyle === "icon"
+                    ? <MapPin className="w-2.5 h-2.5" />
+                    : `${idx + 1}`;
+
+                  const pointLabel = isBranch
+                    ? "Titik Terhubung"
+                    : markerStyle === "letters"
+                    ? `Titik ${getLetterLabel(idx)}`
+                    : `Titik ${idx + 1}`;
+
+                  if (isEditing) {
+                    return (
+                      <div
+                        key={wp.id}
+                        className="p-2.5 rounded-lg border border-primary bg-primary/5 flex items-center justify-between gap-2 text-xs transition-colors shadow-xs"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <span
+                          className={`${markerStyle === "none" && !isBranch ? "w-3.5 h-3.5" : "w-5 h-5"} rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 text-white shadow-2xs ${
+                            isBranch
+                              ? "bg-teal-600"
+                              : isOrigin
+                              ? "bg-emerald-600"
+                              : isDestination
+                              ? "bg-rose-600"
+                              : "bg-amber-500"
+                          }`}
+                        >
+                          {badgeText}
+                        </span>
+                        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                          <input
+                            type="text"
+                            value={editingWpName}
+                            onChange={(e) => setEditingWpName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                saveEditWaypoint(idx);
+                              } else if (e.key === "Escape") {
+                                e.preventDefault();
+                                setEditingWpIndex(null);
+                              }
+                            }}
+                            autoFocus
+                            className="h-7 px-2 text-[11px] rounded bg-background border border-primary text-foreground outline-none w-full min-w-0 font-medium focus:ring-1 focus:ring-primary shadow-xs"
+                            placeholder="Nama titik jalan..."
+                          />
+                          <button
+                            type="button"
+                            onClick={() => saveEditWaypoint(idx)}
+                            className="p-1 rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shrink-0 cursor-pointer shadow-xs"
+                            title="Simpan Nama Titik (Enter)"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingWpIndex(null)}
+                            className="p-1 rounded bg-secondary text-muted-foreground hover:text-foreground transition-colors shrink-0 cursor-pointer"
+                            title="Batal (Esc)"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
 
                   return (
                     <ContextMenu key={wp.id}>
@@ -479,23 +766,44 @@ export function TambahRute({
                         >
                           <div className="flex items-center gap-2 min-w-0 flex-1">
                             <span
-                              className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 text-white shadow-2xs ${
-                                isOrigin
+                              className={`${markerStyle === "none" && !isBranch ? "w-3.5 h-3.5" : "w-5 h-5"} rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 text-white shadow-2xs ${
+                                isBranch
+                                  ? "bg-teal-600"
+                                  : isOrigin
                                   ? "bg-emerald-600"
                                   : isDestination
                                   ? "bg-rose-600"
                                   : "bg-amber-500"
                               }`}
                             >
-                              {isOrigin ? "1" : isDestination ? "N" : `${idx + 1}`}
+                              {badgeText}
                             </span>
-                            <div className="min-w-0 flex-1">
-                              <div className="font-semibold text-foreground truncate text-[11px] flex items-center gap-1.5">
-                                <span className="truncate">{wp.name}</span>
+                            <div className="min-w-0 flex-1 group/name">
+                              <div
+                                className="font-semibold text-foreground truncate text-[11px] flex items-center gap-1.5"
+                              >
+                                <span
+                                  onClick={() => onFocusWaypoint?.(wp.lat, wp.lng)}
+                                  className="truncate cursor-pointer hover:text-primary transition-colors"
+                                  title={`Klik untuk zoom ke ${pointLabel} di peta`}
+                                >
+                                  {wp.name}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    startEditWaypoint(idx, wp.name || "");
+                                  }}
+                                  className="opacity-0 group-hover/name:opacity-100 p-0.5 text-muted-foreground hover:text-primary rounded cursor-pointer transition-all shrink-0"
+                                  title="Edit Nama Titik"
+                                >
+                                  <Edit3 className="w-3 h-3" />
+                                </button>
                                 {wp.connectionType === "nearest_branch" && (
                                   <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 text-[9px] font-medium rounded bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 shrink-0">
-                                    <GitFork className="w-2.5 h-2.5" />
-                                    Cabang T
+                                    <Link2 className="w-2.5 h-2.5" />
+                                    Terhubung
                                   </span>
                                 )}
                                 {(wp.connectionType === "disconnected" || wp.isDisconnected) && (
@@ -508,55 +816,154 @@ export function TambahRute({
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-0.5 shrink-0">
-                            <button
-                              type="button"
-                              disabled={idx === 0}
-                              onClick={() => onMoveWaypoint(idx, "up")}
-                              className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed"
-                              title="Geser Urutan Naik"
-                            >
-                              <MoveUp className="w-3 h-3" />
-                            </button>
-                            <button
-                              type="button"
-                              disabled={idx === waypoints.length - 1}
-                              onClick={() => onMoveWaypoint(idx, "down")}
-                              className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed"
-                              title="Geser Urutan Turun"
-                            >
-                              <MoveDown className="w-3 h-3" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => onRemoveWaypoint(idx)}
-                              className="p-1 text-destructive/70 hover:text-destructive cursor-pointer"
-                              title="Hapus Titik Ini"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
+                          {/* Tombol Opsi Titik: Titik Tiga (Compact) */}
+                          <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger
+                                className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary cursor-pointer transition-colors"
+                                title="Opsi Titik"
+                              >
+                                <MoreVertical className="w-3.5 h-3.5" />
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-52 text-xs">
+                                <DropdownMenuItem
+                                  onClick={() => onFocusWaypoint?.(wp.lat, wp.lng)}
+                                  className="cursor-pointer flex items-center gap-2"
+                                >
+                                  <Eye className="w-3.5 h-3.5 text-primary" />
+                                  <span>Lihat di Peta</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => startEditWaypoint(idx, wp.name || "")}
+                                  className="cursor-pointer flex items-center gap-2"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5 text-primary" />
+                                  <span>Edit Nama Titik</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  disabled={idx === 0}
+                                  onClick={() => onMoveWaypoint(idx, "up")}
+                                  className="cursor-pointer flex items-center gap-2 disabled:opacity-40"
+                                >
+                                  <MoveUp className="w-3.5 h-3.5" />
+                                  <span>Geser Urutan Naik</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  disabled={idx === waypoints.length - 1}
+                                  onClick={() => onMoveWaypoint(idx, "down")}
+                                  className="cursor-pointer flex items-center gap-2 disabled:opacity-40"
+                                >
+                                  <MoveDown className="w-3.5 h-3.5" />
+                                  <span>Geser Urutan Turun</span>
+                                </DropdownMenuItem>
+
+                                {idx > 0 && onConnectWaypointToNearest && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      onClick={() => onConnectWaypointToNearest(idx)}
+                                      className="cursor-pointer flex items-center justify-between"
+                                    >
+                                      <span className="flex items-center gap-2">
+                                        <Link2 className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                                        <span>Hubungkan ke Jalur Terdekat</span>
+                                      </span>
+                                      {wp.connectionType === "nearest_branch" && (
+                                        <Check className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                                      )}
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+
+                                {idx > 0 && onToggleDisconnectWaypoint && (
+                                  <DropdownMenuItem
+                                    onClick={() => onToggleDisconnectWaypoint(idx)}
+                                    className="cursor-pointer flex items-center justify-between"
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      {wp.connectionType === "disconnected" || wp.isDisconnected ? (
+                                        <>
+                                          <Link2 className="w-3.5 h-3.5 text-primary" />
+                                          <span>Sambungkan ke Sebelumnya</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Unlink className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                                          <span>Buat Jalan Lain (Pisah)</span>
+                                        </>
+                                      )}
+                                    </span>
+                                    {(wp.connectionType === "disconnected" || wp.isDisconnected) && (
+                                      <Check className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                                    )}
+                                  </DropdownMenuItem>
+                                )}
+
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => onRemoveWaypoint(idx)}
+                                  className="cursor-pointer text-destructive focus:text-destructive flex items-center gap-2"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>Hapus Titik</span>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         </div>
                       </ContextMenuTrigger>
 
-                      <ContextMenuContent className="w-56">
-                        <div className="px-2.5 py-1.5 text-[11px] font-semibold text-muted-foreground border-b border-border/50">
-                          Titik {idx + 1}: {wp.name}
-                        </div>
+                      <ContextMenuContent className="w-52">
+                        <ContextMenuItem
+                          onClick={() => onFocusWaypoint?.(wp.lat, wp.lng)}
+                          className="cursor-pointer text-xs flex items-center gap-2"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-primary" />
+                          <span>Lihat di Peta</span>
+                        </ContextMenuItem>
+
+                        <ContextMenuItem
+                          onClick={() => startEditWaypoint(idx, wp.name || "")}
+                          className="cursor-pointer text-xs flex items-center gap-2"
+                        >
+                          <Edit3 className="w-3.5 h-3.5 text-primary" />
+                          <span>Edit Nama Titik</span>
+                        </ContextMenuItem>
+
+                        <ContextMenuItem
+                          disabled={idx === 0}
+                          onClick={() => onMoveWaypoint(idx, "up")}
+                          className="cursor-pointer text-xs flex items-center gap-2 disabled:opacity-40"
+                        >
+                          <MoveUp className="w-3.5 h-3.5" />
+                          <span>Geser Urutan Naik</span>
+                        </ContextMenuItem>
+
+                        <ContextMenuItem
+                          disabled={idx === waypoints.length - 1}
+                          onClick={() => onMoveWaypoint(idx, "down")}
+                          className="cursor-pointer text-xs flex items-center gap-2 disabled:opacity-40"
+                        >
+                          <MoveDown className="w-3.5 h-3.5" />
+                          <span>Geser Urutan Turun</span>
+                        </ContextMenuItem>
 
                         {idx > 0 && onConnectWaypointToNearest && (
-                          <ContextMenuItem
-                            onClick={() => onConnectWaypointToNearest(idx)}
-                            className="cursor-pointer text-xs flex items-center justify-between"
-                          >
-                            <span className="flex items-center">
-                              <GitFork className="w-3.5 h-3.5 mr-2 text-teal-600 dark:text-teal-400" />
-                              Hubungkan Rute Terdekat (Huruf T)
-                            </span>
-                            {wp.connectionType === "nearest_branch" && (
-                              <Check className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
-                            )}
-                          </ContextMenuItem>
+                          <>
+                            <ContextMenuSeparator />
+                            <ContextMenuItem
+                              onClick={() => onConnectWaypointToNearest(idx)}
+                              className="cursor-pointer text-xs flex items-center justify-between"
+                            >
+                              <span className="flex items-center">
+                                <Link2 className="w-3.5 h-3.5 mr-2 text-teal-600 dark:text-teal-400" />
+                                Hubungkan ke Jalur Terdekat
+                              </span>
+                              {wp.connectionType === "nearest_branch" && (
+                                <Check className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
+                              )}
+                            </ContextMenuItem>
+                          </>
                         )}
 
                         {idx > 0 && onToggleDisconnectWaypoint && (
@@ -583,13 +990,14 @@ export function TambahRute({
                           </ContextMenuItem>
                         )}
 
+                        <ContextMenuSeparator />
+
                         <ContextMenuItem
-                          variant="destructive"
                           onClick={() => onRemoveWaypoint(idx)}
-                          className="cursor-pointer text-xs"
+                          className="cursor-pointer text-xs text-destructive focus:text-destructive flex items-center"
                         >
                           <Trash2 className="w-3.5 h-3.5 mr-2" />
-                          <span>Hapus Titik Ini</span>
+                          Hapus Titik Ini
                         </ContextMenuItem>
                       </ContextMenuContent>
                     </ContextMenu>

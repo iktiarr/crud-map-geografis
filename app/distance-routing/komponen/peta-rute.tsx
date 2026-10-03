@@ -7,6 +7,7 @@ import {
   TraversedRoadRecord, 
   WaypointItem, 
   LineStyle,
+  MarkerStyle,
   AlternativeRouteOption,
 } from "../tipe";
 
@@ -40,6 +41,7 @@ interface PetaRuteProps {
   customWeight: number;
   customOpacity: number;
   customLineStyle: LineStyle;
+  markerStyle?: MarkerStyle;
   isAddPointMode: boolean;
   onMapClickAddWaypoint: (lat: number, lng: number) => void;
   onWaypointDragEnd: (index: number, lat: number, lng: number) => void;
@@ -54,12 +56,19 @@ interface PetaRuteProps {
   basemapId: string;
   focusedRouteId: number | null;
   focusedFolder?: string | null;
+  zoomTargetRouteId?: { id: number; timestamp: number } | null;
+  zoomTargetFolder?: { name: string; timestamp: number } | null;
+  zoomTargetPoint?: { lat: number; lng: number; timestamp: number } | null;
+  zoomTargetDraftRoute?: { timestamp: number } | null;
+  onClearZoomTarget?: (type: "route" | "folder" | "point" | "draft") => void;
   activeRouteId?: number | null;
   isCalculatingRoute?: boolean;
   onRouteClick: (route: TraversedRoadRecord) => void;
   onRemoveWaypoint?: (index: number) => void;
+  onMoveWaypoint?: (index: number, direction: "up" | "down") => void;
   onToggleDisconnectWaypoint?: (index: number) => void;
   onConnectWaypointToNearest?: (index: number) => void;
+  onUpdateWaypointName?: (index: number, newName: string) => void;
   hideWaypointsOnMap?: boolean;
 }
 
@@ -76,6 +85,7 @@ export function PetaRute({
   customWeight,
   customOpacity,
   customLineStyle,
+  markerStyle,
   isAddPointMode,
   onMapClickAddWaypoint,
   onWaypointDragEnd,
@@ -85,12 +95,19 @@ export function PetaRute({
   basemapId,
   focusedRouteId,
   focusedFolder,
+  zoomTargetRouteId,
+  zoomTargetFolder,
+  zoomTargetPoint,
+  zoomTargetDraftRoute,
+  onClearZoomTarget,
   activeRouteId,
   isCalculatingRoute,
   onRouteClick,
   onRemoveWaypoint,
+  onMoveWaypoint,
   onToggleDisconnectWaypoint,
   onConnectWaypointToNearest,
+  onUpdateWaypointName,
   hideWaypointsOnMap,
 }: PetaRuteProps) {
   return (
@@ -120,12 +137,15 @@ export function PetaRute({
         customWeight={customWeight}
         customOpacity={customOpacity}
         customLineStyle={customLineStyle}
+        markerStyle={markerStyle}
         isAddPointMode={isAddPointMode}
         onMapClickAddPoint={onMapClickAddWaypoint}
         onWaypointDragEnd={onWaypointDragEnd}
         onRemoveWaypoint={onRemoveWaypoint}
+        onMoveWaypoint={onMoveWaypoint}
         onToggleDisconnectWaypoint={onToggleDisconnectWaypoint}
         onConnectWaypointToNearest={onConnectWaypointToNearest}
+        onUpdateWaypointName={onUpdateWaypointName}
         hideWaypointsOnMap={hideWaypointsOnMap}
         onRouteLineClick={onRouteLineClick}
         insertModeInfo={insertModeInfo}
@@ -133,6 +153,11 @@ export function PetaRute({
         activeBasemapId={basemapId}
         focusedRouteId={focusedRouteId}
         focusedFolder={focusedFolder}
+        zoomTargetRouteId={zoomTargetRouteId}
+        zoomTargetFolder={zoomTargetFolder}
+        zoomTargetPoint={zoomTargetPoint}
+        zoomTargetDraftRoute={zoomTargetDraftRoute}
+        onClearZoomTarget={onClearZoomTarget}
         activeRouteId={activeRouteId}
         isCalculatingRoute={isCalculatingRoute}
         onSelectRoute={onRouteClick}

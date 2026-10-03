@@ -29,6 +29,7 @@ interface DaftarRuteFolderProps {
   onOpenRenameFolderModal: (folderName: string) => void;
   onOpenDeleteFolderModal: (folderName: string) => void;
   onOpenNewRouteModal: () => void;
+  onOpenRenameRouteModal?: (route: TraversedRoadRecord) => void;
   onEditRouteOnMap?: (route: TraversedRoadRecord) => void;
 }
 
@@ -43,6 +44,7 @@ export function DaftarRuteFolder({
   onOpenRenameFolderModal,
   onOpenDeleteFolderModal,
   onOpenNewRouteModal,
+  onOpenRenameRouteModal,
   onEditRouteOnMap,
 }: DaftarRuteFolderProps) {
   const isTanpaFolder = selectedFolder === "Tanpa Folder";
@@ -143,8 +145,36 @@ export function DaftarRuteFolder({
                   {r.name}
                 </span>
 
-                {/* Tombol Action Titik Tiga */}
-                <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                {/* Tombol Action: Ikon Mata (Zoom ke Rute) & Titik Tiga */}
+                <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    onClick={() => onFocusRoute(r.id)}
+                    className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                      focusedRouteId === r.id
+                        ? "bg-primary text-primary-foreground shadow-2xs"
+                        : "text-muted-foreground hover:text-primary hover:bg-primary/10"
+                    }`}
+                    title={`Zoom & lihat rute "${r.name}" di peta`}
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onOpenRenameRouteModal) {
+                        onOpenRenameRouteModal(r);
+                      } else {
+                        onOpenEditRouteModal(r);
+                      }
+                    }}
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                    title={`Ubah nama rute "${r.name}"`}
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                  </button>
+
                   <DropdownMenu>
                     <DropdownMenuTrigger
                       className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary cursor-pointer transition-colors"
@@ -152,13 +182,13 @@ export function DaftarRuteFolder({
                     >
                       <MoreVertical className="w-3.5 h-3.5" />
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-36 text-xs">
+                    <DropdownMenuContent align="end" className="w-40 text-xs">
                       <DropdownMenuItem
                         onClick={() => onFocusRoute(r.id)}
                         className="cursor-pointer flex items-center gap-2"
                       >
                         <Eye className="w-3.5 h-3.5 text-primary" />
-                        <span>Lihat</span>
+                        <span>Lihat di Peta</span>
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => {
@@ -173,13 +203,16 @@ export function DaftarRuteFolder({
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => {
-                          const routeToEdit = { ...r };
-                          setTimeout(() => onOpenEditRouteModal(routeToEdit), 50);
+                          if (onOpenRenameRouteModal) {
+                            onOpenRenameRouteModal(r);
+                          } else {
+                            onOpenEditRouteModal({ ...r });
+                          }
                         }}
                         className="cursor-pointer flex items-center gap-2"
                       >
                         <Edit3 className="w-3.5 h-3.5 text-primary" />
-                        <span>Edit Nama</span>
+                        <span>Ubah Nama</span>
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem

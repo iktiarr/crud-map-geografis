@@ -1,4 +1,4 @@
-import { ColorPaletteItem } from "./tipe";
+import { ColorPaletteItem, TravelMode, ConnectionMode, MarkerStyle } from "./tipe";
 
 // Palet Warna Desain Aether Modul 5
 export const COLOR_PALETTE: ColorPaletteItem[] = [
@@ -18,7 +18,9 @@ export const DEFAULT_ROUTE_CONFIG = {
   weight: 6,
   opacity: 0.9,
   lineStyle: "solid" as const,
-  travelMode: "driving" as const,
+  travelMode: "driving" as TravelMode,
+  connectionMode: "sequential" as ConnectionMode,
+  markerStyle: "numbers" as MarkerStyle,
   category: "Jalan Terhubung",
   basemapId: "carto-voyager",
 };

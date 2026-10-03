@@ -177,7 +177,6 @@ export function LeafletSpatialCrudMap({
       attributionControl: false,
       fadeAnimation: true,
       zoomAnimation: true,
-      preferCanvas: true,
       trackResize: true,
     });
 

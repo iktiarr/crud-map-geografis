@@ -109,6 +109,8 @@ export async function initDatabase() {
       try {
         await sql`ALTER TABLE traversed_roads ADD COLUMN IF NOT EXISTS folder_name VARCHAR(100) DEFAULT 'Utama';`;
         await sql`ALTER TABLE traversed_roads ADD COLUMN IF NOT EXISTS waypoints JSONB DEFAULT '[]'::jsonb;`;
+        await sql`ALTER TABLE traversed_roads ADD COLUMN IF NOT EXISTS marker_style VARCHAR(50) DEFAULT 'numbers';`;
+        await sql`ALTER TABLE traversed_roads ADD COLUMN IF NOT EXISTS connection_mode VARCHAR(50) DEFAULT 'sequential';`;
         await sql`CREATE INDEX IF NOT EXISTS idx_traversed_roads_folder ON traversed_roads(folder_name);`;
         await sql`CREATE INDEX IF NOT EXISTS idx_traversed_roads_geom ON traversed_roads USING GIST(geom);`;
       } catch (idxErr) {

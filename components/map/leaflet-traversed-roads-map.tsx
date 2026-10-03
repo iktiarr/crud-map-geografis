@@ -7,7 +7,8 @@ import {
   WaypointItem,
   AlternativeRouteOption,
 } from "@/lib/road-routing";
-import { Trash2, Loader2, GitFork, Link2, Unlink, Check } from "lucide-react";
+import { getLetterLabel } from "@/app/distance-routing/tipe";
+import { Trash2, Loader2, Link2, Unlink, Check, Eye, MoveUp, MoveDown, Edit3, X } from "lucide-react";
 
 export interface TraversedRoadRecord {
   id: number;
@@ -26,6 +27,8 @@ export interface TraversedRoadRecord {
   weight: number;
   opacity: number;
   line_style: "solid" | "dashed" | "dotted" | string;
+  marker_style?: "numbers" | "letters" | "none" | "icon" | string;
+  connection_mode?: "sequential" | "nearest" | "direct_line" | string;
   travel_mode?: string;
   category?: string;
   description?: string;
@@ -54,6 +57,7 @@ export interface LeafletTraversedRoadsMapProps {
   customWeight: number;
   customOpacity: number;
   customLineStyle: "solid" | "dashed" | "dotted" | string;
+  markerStyle?: "numbers" | "letters" | "none" | "icon";
 
   // Mode & Handlers
   isAddPointMode: boolean;
@@ -63,11 +67,18 @@ export interface LeafletTraversedRoadsMapProps {
   onSelectRoute?: (route: TraversedRoadRecord) => void;
   onDeleteRoute?: (id: number) => void;
   onRemoveWaypoint?: (index: number) => void;
+  onMoveWaypoint?: (index: number, direction: "up" | "down") => void;
   onToggleDisconnectWaypoint?: (index: number) => void;
   onConnectWaypointToNearest?: (index: number) => void;
+  onUpdateWaypointName?: (index: number, newName: string) => void;
   hideWaypointsOnMap?: boolean;
   focusedRouteId?: number | null;
   focusedFolder?: string | null;
+  zoomTargetRouteId?: { id: number; timestamp: number } | null;
+  zoomTargetFolder?: { name: string; timestamp: number } | null;
+  zoomTargetPoint?: { lat: number; lng: number; timestamp: number } | null;
+  zoomTargetDraftRoute?: { timestamp: number } | null;
+  onClearZoomTarget?: (type: "route" | "folder" | "point" | "draft") => void;
   activeRouteId?: number | null;
   isCalculatingRoute?: boolean;
 
@@ -96,18 +107,25 @@ export function LeafletTraversedRoadsMap({
   customWeight = 6,
   customOpacity = 0.9,
   customLineStyle = "solid",
+  markerStyle = "numbers",
   isAddPointMode = true,
   onMapClickAddPoint,
   onWaypointDragEnd,
   onRemoveWaypoint,
+  onMoveWaypoint,
   onToggleDisconnectWaypoint,
   onConnectWaypointToNearest,
+  onUpdateWaypointName,
   hideWaypointsOnMap = false,
   onRouteLineClick,
   onSelectRoute,
   onDeleteRoute,
   focusedRouteId,
-  focusedFolder,
+  zoomTargetRouteId,
+  zoomTargetFolder,
+  zoomTargetPoint,
+  zoomTargetDraftRoute,
+  onClearZoomTarget,
   activeRouteId = null,
   isCalculatingRoute = false,
   insertModeInfo,
@@ -126,6 +144,11 @@ export function LeafletTraversedRoadsMap({
   const alternativeRoutesLayerGroupRef = React.useRef<LType.FeatureGroup | null>(null);
   const waypointsLayerGroupRef = React.useRef<LType.FeatureGroup | null>(null);
   const routePolylineMapRef = React.useRef<Map<number, LType.Polyline>>(new Map());
+  const routesRef = React.useRef(routes);
+
+  React.useEffect(() => {
+    routesRef.current = routes;
+  });
 
   const [L, setL] = React.useState<typeof LType | null>(null);
 
@@ -171,11 +194,14 @@ export function LeafletTraversedRoadsMap({
   const callbacksRef = React.useRef({
     isAddPointMode,
     waypoints,
+    draftPathCoordinates,
     onMapClickAddPoint,
     onWaypointDragEnd,
     onRemoveWaypoint,
+    onMoveWaypoint,
     onToggleDisconnectWaypoint,
     onConnectWaypointToNearest,
+    onUpdateWaypointName,
     onRouteLineClick,
     onSelectAlternativeRoute,
     onSelectRoute,
@@ -186,11 +212,14 @@ export function LeafletTraversedRoadsMap({
     callbacksRef.current = {
       isAddPointMode,
       waypoints,
+      draftPathCoordinates,
       onMapClickAddPoint,
       onWaypointDragEnd,
       onRemoveWaypoint,
+      onMoveWaypoint,
       onToggleDisconnectWaypoint,
       onConnectWaypointToNearest,
+      onUpdateWaypointName,
       onRouteLineClick,
       onSelectAlternativeRoute,
       onSelectRoute,
@@ -206,32 +235,59 @@ export function LeafletTraversedRoadsMap({
     wp: WaypointItem;
   } | null>(null);
 
+  // State Edit Nama Titik dari Peta
+  const [mapEditingWp, setMapEditingWp] = React.useState<{ index: number; name: string } | null>(null);
+
+  const closeWaypointContextMenu = React.useCallback(() => {
+    setWaypointContextMenu(null);
+    setMapEditingWp(null);
+  }, []);
+
   React.useEffect(() => {
     if (!waypointContextMenu) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setWaypointContextMenu(null);
+      if (e.key === "Escape") {
+        closeWaypointContextMenu();
+      }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [waypointContextMenu]);
+  }, [waypointContextMenu, closeWaypointContextMenu]);
+
+  const [initialBasemapId] = React.useState(activeBasemapId);
 
   // Initialize Map
   React.useEffect(() => {
     if (!L || !mapContainerRef.current || mapInstanceRef.current) return;
 
+    let initialCenter: [number, number] = [-6.9754, 108.4831];
+    let initialZoom = 14;
+    try {
+      const savedView = sessionStorage.getItem("traversed_map_view");
+      if (savedView) {
+        const parsed = JSON.parse(savedView);
+        if (typeof parsed.lat === "number" && typeof parsed.lng === "number" && typeof parsed.zoom === "number") {
+          initialCenter = [parsed.lat, parsed.lng];
+          initialZoom = parsed.zoom;
+        }
+      }
+    } catch {
+      // ignore
+    }
+
     const map = L.map(mapContainerRef.current, {
-      center: [-6.9754, 108.4831],
-      zoom: 14,
+      center: initialCenter,
+      zoom: initialZoom,
       zoomControl: false,
       fadeAnimation: true,
       zoomAnimation: true,
-      preferCanvas: true,
+      doubleClickZoom: false, // Mencegah zoom tidak sengaja saat klik cepat menambah titik
     });
 
     L.control.zoom({ position: "topright" }).addTo(map);
     L.control.scale({ imperial: false, position: "bottomright" }).addTo(map);
 
-    const initialLayer = createTileLayer(L, activeBasemapId);
+    const initialLayer = createTileLayer(L, initialBasemapId);
     initialLayer.addTo(map);
     currentTileLayerRef.current = initialLayer;
 
@@ -255,8 +311,32 @@ export function LeafletTraversedRoadsMap({
       }
     });
 
-    const resizeObserver = new ResizeObserver(() => {
-      map.invalidateSize();
+    // Simpan posisi peta saat user pan / zoom secara manual
+    map.on("moveend", () => {
+      try {
+        const c = map.getCenter();
+        const z = map.getZoom();
+        sessionStorage.setItem(
+          "traversed_map_view",
+          JSON.stringify({ lat: c.lat, lng: c.lng, zoom: z })
+        );
+      } catch {
+        // ignore
+      }
+    });
+
+    // Cegah Leaflet mem-pan otomatis kembali ke center lama saat container berubah ukuran
+    let lastW = mapContainerRef.current?.clientWidth || 0;
+    let lastH = mapContainerRef.current?.clientHeight || 0;
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (Math.abs(width - lastW) > 2 || Math.abs(height - lastH) > 2) {
+          lastW = width;
+          lastH = height;
+          map.invalidateSize({ pan: false });
+        }
+      }
     });
     if (mapContainerRef.current) {
       resizeObserver.observe(mapContainerRef.current);
@@ -266,10 +346,18 @@ export function LeafletTraversedRoadsMap({
 
     return () => {
       resizeObserver.disconnect();
+      try {
+        savedRoutesGroup.clearLayers();
+        alternativeRoutesGroup.clearLayers();
+        draftRouteGroup.clearLayers();
+        waypointsGroup.clearLayers();
+      } catch {
+        // ignore
+      }
       map.remove();
       mapInstanceRef.current = null;
     };
-  }, [L, createTileLayer, activeBasemapId]);
+  }, [L, createTileLayer, initialBasemapId]);
 
   // Update Basemap Layer
   React.useEffect(() => {
@@ -396,7 +484,7 @@ export function LeafletTraversedRoadsMap({
             </button>
           </div>
         </div>`,
-        { maxWidth: 300 }
+        { maxWidth: 300, autoPan: false }
       );
 
       mainPolyline.on("popupopen", () => {
@@ -592,29 +680,69 @@ export function LeafletTraversedRoadsMap({
         ? "bg-rose-600"
         : "bg-sky-600";
 
-      const typeBadgeText = isBranch ? " (Cabang T)" : isDisconnected ? " (Jalan Lain)" : "";
+      const typeBadgeText = isBranch ? " (Terhubung)" : isDisconnected ? " (Jalan Lain)" : "";
 
-      const wpIcon = L.divIcon({
-        className: "custom-waypoint-marker",
-        html: `
-          <div class="relative group cursor-grab active:cursor-grabbing">
-            <div class="w-8 h-8 rounded-full ${bgColor} text-white font-bold text-xs flex items-center justify-center shadow-lg ring-4 ${ringColor} transition-transform transform group-hover:scale-110">
-              ${isBranch ? "T" : pointNumber}
+      // Konten dalam badge: nomor, huruf, kosong (dot polos), atau ikon pin
+      let badgeContent = "";
+      if (markerStyle === "letters") {
+        badgeContent = getLetterLabel(index);
+      } else if (markerStyle === "none") {
+        badgeContent = "";
+      } else if (markerStyle === "icon") {
+        badgeContent = `<svg class="w-3.5 h-3.5 inline-block fill-current" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`;
+      } else {
+        badgeContent = `${pointNumber}`;
+      }
+
+      const pointLabel =
+        markerStyle === "letters"
+        ? `Titik ${getLetterLabel(index)}`
+        : `Titik ${pointNumber}`;
+
+      const isNoneStyle = markerStyle === "none";
+      let wpIcon: LType.DivIcon;
+
+      if (isNoneStyle) {
+        // Mode None: Bersih 100%. Hanya klik di peta untuk menghubungkan jalan.
+        // Tidak ada pin besar atau label text box yang menutupi jalan!
+        wpIcon = L.divIcon({
+          className: "custom-waypoint-marker-none",
+          html: `
+            <div class="relative group cursor-pointer w-4 h-4 -ml-2 -mt-2 flex items-center justify-center">
+              <div class="w-2.5 h-2.5 rounded-full bg-primary/80 opacity-0 group-hover:opacity-100 transition-opacity ring-2 ring-white shadow"></div>
             </div>
-            <div class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 ${arrowBg} rotate-45"></div>
-            <span class="absolute top-9 left-1/2 -translate-x-1/2 whitespace-nowrap bg-background/95 backdrop-blur border border-border text-[10px] font-medium px-2 py-0.5 rounded shadow text-foreground pointer-events-none max-w-32.5 truncate block text-center">
-              Titik ${pointNumber}: ${wp.name || "Titik Rute"}${typeBadgeText}
-            </span>
-          </div>
-        `,
-        iconSize: [32, 32],
-        iconAnchor: [16, 32],
-      });
+          `,
+          iconSize: [16, 16],
+          iconAnchor: [8, 8],
+        });
+      } else {
+        const sizeClass = "w-8 h-8";
+        const iconSize: [number, number] = [32, 32];
+        const iconAnchor: [number, number] = [16, 32];
+
+        wpIcon = L.divIcon({
+          className: "custom-waypoint-marker",
+          html: `
+            <div class="relative group cursor-grab active:cursor-grabbing">
+              <div class="${sizeClass} rounded-full ${bgColor} text-white font-bold text-xs flex items-center justify-center shadow-lg ring-4 ${ringColor} transition-transform transform group-hover:scale-110">
+                ${badgeContent}
+              </div>
+              <div class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 ${arrowBg} rotate-45"></div>
+              <!-- Tooltip nama titik hanya tampil saat di-hover agar jalan tetap bersih tanpa tertutup box teks -->
+              <span class="absolute top-9 left-1/2 -translate-x-1/2 whitespace-nowrap bg-background/95 backdrop-blur border border-border text-[10px] font-medium px-2 py-0.5 rounded shadow text-foreground pointer-events-none max-w-36 truncate hidden group-hover:block z-50 text-center">
+                ${pointLabel}: ${wp.name || "Titik Rute"}${typeBadgeText}
+              </span>
+            </div>
+          `,
+          iconSize,
+          iconAnchor,
+        });
+      }
 
       const marker = L.marker([wp.lat, wp.lng], {
         icon: wpIcon,
         draggable: true,
-        title: `Titik ${pointNumber}: ${wp.name || ""} (Klik kanan untuk opsi cabang/pisah)`,
+        title: `${pointLabel}: ${wp.name || ""} (Klik kanan untuk opsi cabang/pisah)`,
       });
 
       marker.on("dragend", (e: LType.DragEndEvent) => {
@@ -639,7 +767,7 @@ export function LeafletTraversedRoadsMap({
       marker.bindPopup(`
         <div class="p-1 text-xs space-y-1">
           <div class="font-bold flex items-center gap-1.5">
-            <span>Titik ${pointNumber} ${isStart ? "(Awal)" : isEnd ? "(Tujuan Akhir)" : ""}</span>
+            <span>${pointLabel} ${isStart ? "(Awal)" : isEnd ? "(Tujuan Akhir)" : ""}</span>
             ${isBranch ? '<span class="px-1.5 py-0.5 rounded bg-teal-500/20 text-teal-700 dark:text-teal-400 text-[10px] font-semibold">Cabang T</span>' : ""}
             ${isDisconnected ? '<span class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-700 dark:text-amber-400 text-[10px] font-semibold">Jalan Terpisah</span>' : ""}
           </div>
@@ -648,98 +776,111 @@ export function LeafletTraversedRoadsMap({
             💡 Klik kanan pin untuk opsi Cabang T / Buat Jalan Lain / Hapus
           </div>
         </div>
-      `);
+      `, { autoPan: false });
 
       group.addLayer(marker);
     });
-  }, [L, waypoints, hideWaypointsOnMap]);
+  }, [L, waypoints, hideWaypointsOnMap, markerStyle]);
 
-  // Fit bounds when focusedRouteId changes
+  const handledTimestampsRef = React.useRef<{
+    route?: number;
+    folder?: number;
+    point?: number;
+    draft?: number;
+  }>({});
+
+  // Zoom ke rute tertentu HANYA jika dipicu secara eksplisit oleh klik ikon mata pengguna
   React.useEffect(() => {
-    if (!L || !mapInstanceRef.current) return;
+    if (!L || !mapInstanceRef.current || !zoomTargetRouteId) return;
+    if (handledTimestampsRef.current.route === zoomTargetRouteId.timestamp) return;
+    handledTimestampsRef.current.route = zoomTargetRouteId.timestamp;
+    onClearZoomTarget?.("route");
+
     const map = mapInstanceRef.current;
+    const currentRoutes = routesRef.current;
+    const targetRoute = currentRoutes.find((r) => r.id === zoomTargetRouteId.id);
+    if (!targetRoute) return;
 
-    if (focusedRouteId) {
-      const targetRoute = routes.find((r) => r.id === focusedRouteId);
-      if (targetRoute) {
-        // Cek koordinat geojson rute
-        const coords = targetRoute.geojson?.coordinates;
-        if (Array.isArray(coords) && coords.length > 0) {
-          const firstElem = coords[0];
-          const isMulti =
-            targetRoute.geojson?.type === "MultiLineString" ||
-            (Array.isArray(firstElem) && Array.isArray((firstElem as unknown as [number, number])[0]));
+    // Cek koordinat geojson rute
+    const coords = targetRoute.geojson?.coordinates;
+    if (Array.isArray(coords) && coords.length > 0) {
+      const firstElem = coords[0];
+      const isMulti =
+        targetRoute.geojson?.type === "MultiLineString" ||
+        (Array.isArray(firstElem) && Array.isArray((firstElem as unknown as [number, number])[0]));
 
-          const flatCoords = isMulti
-            ? (coords as [number, number][][]).flat()
-            : (coords as [number, number][]);
+      const flatCoords = isMulti
+        ? (coords as [number, number][][]).flat()
+        : (coords as [number, number][]);
 
-          const validPoints = flatCoords
-            .filter(
-              (c) =>
-                Array.isArray(c) &&
-                c.length >= 2 &&
-                !isNaN(c[0]) &&
-                !isNaN(c[1]) &&
-                !(c[0] === 0 && c[1] === 0)
-            )
-            .map((c) => [c[1], c[0]] as [number, number]);
+      const validPoints = flatCoords
+        .filter(
+          (c) =>
+            Array.isArray(c) &&
+            c.length >= 2 &&
+            !isNaN(c[0]) &&
+            !isNaN(c[1]) &&
+            !(c[0] === 0 && c[1] === 0)
+        )
+        .map((c) => [c[1], c[0]] as [number, number]);
 
-          if (validPoints.length > 0) {
-            const bounds = L.latLngBounds(validPoints);
-            if (bounds.isValid()) {
-              map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
-              const poly = routePolylineMapRef.current.get(focusedRouteId);
-              if (poly) {
-                setTimeout(() => {
-                  poly.openPopup();
-                }, 200);
-              }
-              return;
-            }
+      if (validPoints.length > 0) {
+        const bounds = L.latLngBounds(validPoints);
+        if (bounds.isValid()) {
+          map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
+          const poly = routePolylineMapRef.current.get(zoomTargetRouteId.id);
+          if (poly) {
+            setTimeout(() => {
+              poly.openPopup();
+            }, 250);
           }
-        }
-
-        // Cek waypoints rute jika geojson belum ada / kosong
-        if (Array.isArray(targetRoute.waypoints) && targetRoute.waypoints.length > 0) {
-          const validWaypoints = targetRoute.waypoints
-            .filter((w) => w && !isNaN(w.lat) && !isNaN(w.lng) && !(w.lat === 0 && w.lng === 0))
-            .map((w) => [w.lat, w.lng] as [number, number]);
-
-          if (validWaypoints.length > 0) {
-            const bounds = L.latLngBounds(validWaypoints);
-            if (bounds.isValid()) {
-              map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
-              const poly = routePolylineMapRef.current.get(focusedRouteId);
-              if (poly) {
-                setTimeout(() => {
-                  poly.openPopup();
-                }, 200);
-              }
-              return;
-            }
-          }
-        }
-
-        // Jika hanya titik tunggal (misal origin yang valid)
-        if (
-          targetRoute.origin_lat &&
-          targetRoute.origin_lng &&
-          !(targetRoute.origin_lat === 0 && targetRoute.origin_lng === 0)
-        ) {
-          map.setView([targetRoute.origin_lat, targetRoute.origin_lng], 15);
+          return;
         }
       }
     }
-  }, [L, focusedRouteId, routes]);
 
-  // Fit bounds when focusedFolder changes
+    // Cek waypoints rute jika geojson belum ada / kosong
+    if (Array.isArray(targetRoute.waypoints) && targetRoute.waypoints.length > 0) {
+      const validWaypoints = targetRoute.waypoints
+        .filter((w) => w && !isNaN(w.lat) && !isNaN(w.lng) && !(w.lat === 0 && w.lng === 0))
+        .map((w) => [w.lat, w.lng] as [number, number]);
+
+      if (validWaypoints.length > 0) {
+        const bounds = L.latLngBounds(validWaypoints);
+        if (bounds.isValid()) {
+          map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
+          const poly = routePolylineMapRef.current.get(zoomTargetRouteId.id);
+          if (poly) {
+            setTimeout(() => {
+              poly.openPopup();
+            }, 250);
+          }
+          return;
+        }
+      }
+    }
+
+    // Jika hanya titik tunggal (misal origin yang valid)
+    if (
+      targetRoute.origin_lat &&
+      targetRoute.origin_lng &&
+      !(targetRoute.origin_lat === 0 && targetRoute.origin_lng === 0)
+    ) {
+      map.setView([targetRoute.origin_lat, targetRoute.origin_lng], 15);
+    }
+  }, [L, zoomTargetRouteId, onClearZoomTarget]);
+
+  // Zoom ke seluruh rute folder HANYA jika dipicu secara eksplisit oleh klik "Lihat" di folder
   React.useEffect(() => {
-    if (!L || !mapInstanceRef.current || !focusedFolder) return;
-    const map = mapInstanceRef.current;
+    if (!L || !mapInstanceRef.current || !zoomTargetFolder) return;
+    if (handledTimestampsRef.current.folder === zoomTargetFolder.timestamp) return;
+    handledTimestampsRef.current.folder = zoomTargetFolder.timestamp;
+    onClearZoomTarget?.("folder");
 
-    const folderRoutes = routes.filter(
-      (r) => (r.folder_name || "Tanpa Folder").toLowerCase() === focusedFolder.toLowerCase()
+    const map = mapInstanceRef.current;
+    const currentRoutes = routesRef.current;
+    const folderRoutes = currentRoutes.filter(
+      (r) => (r.folder_name || "Tanpa Folder").toLowerCase() === zoomTargetFolder.name.toLowerCase()
     );
 
     if (folderRoutes.length === 0) return;
@@ -782,7 +923,66 @@ export function LeafletTraversedRoadsMap({
         map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
       }
     }
-  }, [L, focusedFolder, routes]);
+  }, [L, zoomTargetFolder, onClearZoomTarget]);
+
+  // Zoom / Pusatkan peta ke titik tertentu HANYA saat dipicu oleh klik ikon mata pada titik
+  React.useEffect(() => {
+    if (!L || !mapInstanceRef.current || !zoomTargetPoint) return;
+    if (handledTimestampsRef.current.point === zoomTargetPoint.timestamp) return;
+    handledTimestampsRef.current.point = zoomTargetPoint.timestamp;
+    onClearZoomTarget?.("point");
+
+    const map = mapInstanceRef.current;
+    if (
+      !isNaN(zoomTargetPoint.lat) &&
+      !isNaN(zoomTargetPoint.lng) &&
+      !(zoomTargetPoint.lat === 0 && zoomTargetPoint.lng === 0)
+    ) {
+      map.flyTo([zoomTargetPoint.lat, zoomTargetPoint.lng], 16, { duration: 0.5 });
+    }
+  }, [L, zoomTargetPoint, onClearZoomTarget]);
+
+  // Zoom ke seluruh rute aktif / draft HANYA saat dipicu oleh tombol Lihat Rute
+  React.useEffect(() => {
+    if (!L || !mapInstanceRef.current || !zoomTargetDraftRoute) return;
+    if (handledTimestampsRef.current.draft === zoomTargetDraftRoute.timestamp) return;
+    handledTimestampsRef.current.draft = zoomTargetDraftRoute.timestamp;
+    onClearZoomTarget?.("draft");
+
+    const map = mapInstanceRef.current;
+    const currentCoords = callbacksRef.current.draftPathCoordinates;
+    const currentWps = callbacksRef.current.waypoints;
+
+    const allPoints: [number, number][] = [];
+    if (Array.isArray(currentCoords) && currentCoords.length > 0) {
+      const firstElem = currentCoords[0];
+      const isMulti =
+        Array.isArray(firstElem) && Array.isArray((firstElem as unknown as [number, number])[0]);
+      const flat = isMulti
+        ? (currentCoords as [number, number][][]).flat()
+        : (currentCoords as [number, number][]);
+      flat.forEach((p) => {
+        if (Array.isArray(p) && p.length >= 2 && !isNaN(p[0]) && !isNaN(p[1])) {
+          allPoints.push([p[0], p[1]]);
+        }
+      });
+    }
+
+    if (allPoints.length === 0 && Array.isArray(currentWps)) {
+      currentWps.forEach((wp) => {
+        if (wp && !isNaN(wp.lat) && !isNaN(wp.lng) && !(wp.lat === 0 && wp.lng === 0)) {
+          allPoints.push([wp.lat, wp.lng]);
+        }
+      });
+    }
+
+    if (allPoints.length > 0) {
+      const bounds = L.latLngBounds(allPoints);
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
+      }
+    }
+  }, [L, zoomTargetDraftRoute, onClearZoomTarget]);
 
   return (
     <div className={`relative bg-background overflow-hidden ${className}`}>
@@ -834,26 +1034,124 @@ export function LeafletTraversedRoadsMap({
             }}
             className="z-9999 min-w-56 rounded-xl border border-border bg-popover/95 p-1.5 text-popover-foreground shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 select-none"
           >
-            <div className="px-2.5 py-1.5 mb-1 text-[11px] font-semibold text-muted-foreground border-b border-border/60 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 truncate">
-                <span className="w-4 h-4 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[10px] font-bold shrink-0">
-                  {waypointContextMenu.index + 1}
-                </span>
-                <span className="truncate text-foreground font-medium">
-                  {waypointContextMenu.wp.name || `Titik ${waypointContextMenu.index + 1}`}
-                </span>
+            {/* Opsi 0: Pusatkan / Zoom di Peta */}
+            <button
+              type="button"
+              onClick={() => {
+                const wp = waypointContextMenu.wp;
+                closeWaypointContextMenu();
+                mapInstanceRef.current?.flyTo([wp.lat, wp.lng], 16, { duration: 0.5 });
+              }}
+              className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-foreground hover:bg-secondary/80 rounded-lg cursor-pointer transition-colors font-medium text-left mb-1"
+            >
+              <Eye className="w-3.5 h-3.5 text-primary shrink-0" />
+              <span>Lihat di Peta</span>
+            </button>
+
+            {/* Opsi Edit Nama Titik */}
+            {mapEditingWp?.index === waypointContextMenu.index ? (
+              <div className="p-1 space-y-1.5 border-b border-border/60 pb-2 mb-1" onClick={(e) => e.stopPropagation()}>
+                <div className="text-[10px] font-semibold text-muted-foreground">Ubah Nama Titik:</div>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="text"
+                    value={mapEditingWp.name}
+                    onChange={(e) => setMapEditingWp({ ...mapEditingWp, name: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        const trimmed = mapEditingWp.name.trim();
+                        if (trimmed) callbacksRef.current.onUpdateWaypointName?.(mapEditingWp.index, trimmed);
+                        closeWaypointContextMenu();
+                      } else if (e.key === "Escape") {
+                        setMapEditingWp(null);
+                      }
+                    }}
+                    autoFocus
+                    className="w-full px-2 py-1 text-xs rounded border border-primary bg-background text-foreground outline-none font-medium"
+                    placeholder="Nama titik..."
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const trimmed = mapEditingWp.name.trim();
+                      if (trimmed) callbacksRef.current.onUpdateWaypointName?.(mapEditingWp.index, trimmed);
+                      closeWaypointContextMenu();
+                    }}
+                    className="p-1 rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shrink-0 cursor-pointer shadow-xs"
+                    title="Simpan"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMapEditingWp(null)}
+                    className="p-1 rounded bg-secondary text-muted-foreground hover:text-foreground transition-colors shrink-0 cursor-pointer"
+                    title="Batal"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
-            </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setMapEditingWp({
+                    index: waypointContextMenu.index,
+                    name: waypointContextMenu.wp.name || "",
+                  });
+                }}
+                className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-foreground hover:bg-secondary/80 rounded-lg cursor-pointer transition-colors font-medium text-left mb-1"
+              >
+                <Edit3 className="w-3.5 h-3.5 text-primary shrink-0" />
+                <span>Edit Nama Titik</span>
+              </button>
+            )}
+
+            {/* Opsi Geser Urutan Naik / Turun */}
+            {onMoveWaypoint && (
+              <div className="flex items-center gap-1 border-b border-border/60 pb-1 mb-1">
+                <button
+                  type="button"
+                  disabled={waypointContextMenu.index === 0}
+                  onClick={() => {
+                    const idx = waypointContextMenu.index;
+                    closeWaypointContextMenu();
+                    callbacksRef.current.onMoveWaypoint?.(idx, "up");
+                  }}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1 text-xs text-foreground hover:bg-secondary/80 disabled:opacity-30 rounded-lg cursor-pointer transition-colors font-medium disabled:cursor-not-allowed"
+                  title="Geser Urutan Naik"
+                >
+                  <MoveUp className="w-3 h-3" />
+                  <span>Naik</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={waypointContextMenu.index === waypoints.length - 1}
+                  onClick={() => {
+                    const idx = waypointContextMenu.index;
+                    closeWaypointContextMenu();
+                    callbacksRef.current.onMoveWaypoint?.(idx, "down");
+                  }}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1 text-xs text-foreground hover:bg-secondary/80 disabled:opacity-30 rounded-lg cursor-pointer transition-colors font-medium disabled:cursor-not-allowed"
+                  title="Geser Urutan Turun"
+                >
+                  <MoveDown className="w-3 h-3" />
+                  <span>Turun</span>
+                </button>
+              </div>
+            )}
 
             {/* Opsi khusus titik ke-2 dst (bukan titik awal) */}
             {waypointContextMenu.index > 0 && (
               <div className="space-y-0.5 mb-1 border-b border-border/60 pb-1">
-                {/* Opsi 1: Hubungkan ke Rute Terdekat (Huruf T) */}
+                {/* Opsi 1: Hubungkan ke Jalur / Titik Terdekat */}
                 <button
                   type="button"
                   onClick={() => {
                     const idx = waypointContextMenu.index;
-                    setWaypointContextMenu(null);
+                    closeWaypointContextMenu();
                     callbacksRef.current.onConnectWaypointToNearest?.(idx);
                   }}
                   className={`w-full flex items-center justify-between px-2 py-1.5 text-xs rounded-lg cursor-pointer transition-colors text-left ${
@@ -861,11 +1159,11 @@ export function LeafletTraversedRoadsMap({
                       ? "bg-teal-500/15 text-teal-700 dark:text-teal-300 font-semibold"
                       : "text-foreground hover:bg-secondary/80 font-medium"
                   }`}
-                  title="Hubungkan titik ini langsung ke jalan terdekat pada rute utama (membentuk huruf T)"
+                  title="Hubungkan titik ini langsung ke jalur atau titik terdekat tanpa membuat rute terpisah"
                 >
                   <div className="flex items-center gap-2">
-                    <GitFork className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
-                    <span>Hubungkan Rute Terdekat (Huruf T)</span>
+                    <Link2 className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
+                    <span>Hubungkan ke Jalur / Titik Terdekat</span>
                   </div>
                   {waypointContextMenu.wp.connectionType === "nearest_branch" && (
                     <Check className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
@@ -877,7 +1175,7 @@ export function LeafletTraversedRoadsMap({
                   type="button"
                   onClick={() => {
                     const idx = waypointContextMenu.index;
-                    setWaypointContextMenu(null);
+                    closeWaypointContextMenu();
                     callbacksRef.current.onToggleDisconnectWaypoint?.(idx);
                   }}
                   className={`w-full flex items-center justify-between px-2 py-1.5 text-xs rounded-lg cursor-pointer transition-colors text-left ${
@@ -911,7 +1209,7 @@ export function LeafletTraversedRoadsMap({
               type="button"
               onClick={() => {
                 const idx = waypointContextMenu.index;
-                setWaypointContextMenu(null);
+                closeWaypointContextMenu();
                 callbacksRef.current.onRemoveWaypoint?.(idx);
               }}
               className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-destructive hover:bg-destructive/10 rounded-lg cursor-pointer transition-colors font-medium text-left"
