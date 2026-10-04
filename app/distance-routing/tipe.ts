@@ -1,10 +1,16 @@
-export type { TraversedRoadRecord } from "@/components/map/leaflet-traversed-roads-map";
+export type { TraversedRoadRecord, RouteGeoJsonObject } from "@/components/map/leaflet-traversed-roads-map";
+export { parseRouteGeoJSON } from "@/components/map/leaflet-traversed-roads-map";
 export type { WaypointItem, MultiPointRouteResult, AlternativeRouteOption } from "@/lib/road-routing";
 
 export type TravelMode = "driving" | "bike" | "foot";
 export type LineStyle = "solid" | "dashed" | "dotted";
-export type ConnectionMode = "sequential" | "nearest" | "direct_line";
-export type MarkerStyle = "numbers" | "letters" | "none" | "icon";
+export type ConnectionMode =
+  | "sequential"
+  | "nearest"
+  | "direct_line"
+  | "loop_closed"
+  | "smart_direct";
+export type MarkerStyle = "numbers" | "letters" | "none" | "icon" | "pin" | "dot" | "random";
 
 export function getLetterLabel(index: number): string {
   let label = "";

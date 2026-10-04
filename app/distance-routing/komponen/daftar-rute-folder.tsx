@@ -7,6 +7,7 @@ import {
   Plus,
   MoreVertical,
   Eye,
+  Folder,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +32,7 @@ interface DaftarRuteFolderProps {
   onOpenNewRouteModal: () => void;
   onOpenRenameRouteModal?: (route: TraversedRoadRecord) => void;
   onEditRouteOnMap?: (route: TraversedRoadRecord) => void;
+  onOpenMoveFolderModal?: (route: TraversedRoadRecord) => void;
 }
 
 export function DaftarRuteFolder({
@@ -41,70 +43,42 @@ export function DaftarRuteFolder({
   onFocusRoute,
   onOpenEditRouteModal,
   onOpenDeleteRouteModal,
-  onOpenRenameFolderModal,
-  onOpenDeleteFolderModal,
   onOpenNewRouteModal,
   onOpenRenameRouteModal,
   onEditRouteOnMap,
+  onOpenMoveFolderModal,
 }: DaftarRuteFolderProps) {
   const isTanpaFolder = selectedFolder === "Tanpa Folder";
 
   return (
     <div className="space-y-3.5 animate-in fade-in duration-150">
-      {/* Navigasi Atas: Kembali ke Semua Folder & Opsi Folder */}
-      <div className="flex items-center justify-between gap-2 pb-2 border-b border-border">
+      {/* Navigasi Atas: Kembali ke Semua Folder & Tombol Tambah Rute */}
+      <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-border">
         <button
           type="button"
           onClick={onBackToAllFolders}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-secondary text-foreground text-xs font-medium cursor-pointer transition-colors"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border bg-card hover:bg-secondary text-foreground text-xs font-medium cursor-pointer transition-colors shrink-0"
+          title="Kembali ke Semua Folder"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Kembali ke Semua Folder</span>
+          <span>Kembali</span>
         </button>
 
         {!isTanpaFolder && (
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className="text-xs font-bold text-foreground truncate max-w-32.5" title={selectedFolder}>
-              {selectedFolder}
-            </span>
-            {selectedFolder !== "Utama" && (
-              <div className="flex items-center gap-0.5 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => onOpenRenameFolderModal(selectedFolder)}
-                  className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary cursor-pointer"
-                  title="Ubah Nama Folder"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onOpenDeleteFolderModal(selectedFolder)}
-                  className="p-1 rounded-md text-destructive/70 hover:text-destructive hover:bg-destructive/10 cursor-pointer"
-                  title="Hapus Folder"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
-          </div>
+          <Button
+            size="sm"
+            onClick={onOpenNewRouteModal}
+            className="h-7.5 px-2.5 text-xs font-semibold cursor-pointer shadow-2xs shrink-0 flex items-center gap-1"
+            title={`Tambah Rute Baru di Folder "${selectedFolder}"`}
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Tambah Rute</span>
+          </Button>
         )}
       </div>
 
       {/* DAFTAR KARTU RUTE */}
       <div className="space-y-3 animate-in fade-in duration-150">
-        {/* Tombol Tambah Rute Baru (Hanya untuk folder kustom, bukan Tanpa Folder) */}
-        {!isTanpaFolder && (
-          <Button
-            size="sm"
-            onClick={onOpenNewRouteModal}
-            className="w-full h-8 text-xs font-semibold cursor-pointer shadow-2xs"
-          >
-            <Plus className="w-3.5 h-3.5 mr-1" />
-            + Tambah Rute Baru di Folder &ldquo;{selectedFolder}&rdquo;
-          </Button>
-        )}
-
         {filteredRoutes.length === 0 ? (
           <div className="py-8 text-center text-xs text-muted-foreground border border-dashed border-border rounded-xl p-4 space-y-2 bg-card/40">
             <Route className="w-8 h-8 text-muted-foreground/30 mx-auto" />
@@ -145,42 +119,14 @@ export function DaftarRuteFolder({
                   {r.name}
                 </span>
 
-                {/* Tombol Action: Ikon Mata (Zoom ke Rute) & Titik Tiga */}
-                <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    type="button"
-                    onClick={() => onFocusRoute(r.id)}
-                    className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                      focusedRouteId === r.id
-                        ? "bg-primary text-primary-foreground shadow-2xs"
-                        : "text-muted-foreground hover:text-primary hover:bg-primary/10"
-                    }`}
-                    title={`Zoom & lihat rute "${r.name}" di peta`}
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (onOpenRenameRouteModal) {
-                        onOpenRenameRouteModal(r);
-                      } else {
-                        onOpenEditRouteModal(r);
-                      }
-                    }}
-                    className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
-                    title={`Ubah nama rute "${r.name}"`}
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                  </button>
-
+                {/* Tombol Action: Cukup Titik Tiga Saja */}
+                <div className="flex items-center shrink-0" onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger
-                      className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary cursor-pointer transition-colors"
+                      className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary cursor-pointer transition-colors"
                       title="Opsi Rute"
                     >
-                      <MoreVertical className="w-3.5 h-3.5" />
+                      <MoreVertical className="w-4 h-4" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-40 text-xs">
                       <DropdownMenuItem
@@ -214,6 +160,15 @@ export function DaftarRuteFolder({
                         <Edit3 className="w-3.5 h-3.5 text-primary" />
                         <span>Ubah Nama</span>
                       </DropdownMenuItem>
+                      {onOpenMoveFolderModal && (
+                        <DropdownMenuItem
+                          onClick={() => onOpenMoveFolderModal(r)}
+                          className="cursor-pointer flex items-center gap-2"
+                        >
+                          <Folder className="w-3.5 h-3.5 text-amber-500" />
+                          <span>Pindahkan ke Folder</span>
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         onClick={() => {

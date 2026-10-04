@@ -99,17 +99,18 @@ const features: FeatureItem[] = [
   {
     id: "distance-routing",
     title: "5. Pemetaan Jalan yang Dilalui",
-    subtitle: "Pemetaan Ruas Jalan & Garis Kustomisasi",
-    description: "Sistem membaca jaringan jalan, menghubungkan dua titik pilihan dengan garis berwarna kustom (warna, ketebalan, gaya garis), serta menyimpan riwayat ke database terpisah.",
+    subtitle: "Gambar Rute Perjalanan di Peta",
+    description: "Tandai titik-titik di peta, lalu sistem otomatis menggambar rute mengikuti jalan sebenarnya. Atur warna dan gaya garis, kelompokkan rute ke dalam folder, dan simpan agar bisa dibuka kembali kapan saja.",
     href: "/distance-routing",
     icon: Route,
     badge: "Database",
     accentBg: "bg-secondary text-foreground border-border",
     borderHover: "hover:border-zinc-500/80 hover:shadow-lg hover:shadow-black/50",
     featuresList: [
-      "Membaca jaringan jalan dan perutean otomatis",
-      "Kustomisasi warna, ketebalan, dan gaya garis rute",
-      "Penyimpanan dan penghapusan database terpisah"
+      "Buat rute otomatis mengikuti jalan dari beberapa titik",
+      "Atur warna, ketebalan, dan gaya garis tiap rute",
+      "Simpan rute ke folder dan lihat kembali di peta"
+
     ]
   },
   {

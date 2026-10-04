@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Folder, FolderPlus, FolderArchive, MoreVertical, Edit3, Trash2, ChevronRight, Eye } from "lucide-react";
+import { Folder, FolderPlus, FolderArchive, MoreVertical, Edit3, Trash2, ChevronRight, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -19,6 +19,7 @@ interface DaftarFolderProps {
   onOpenRenameFolderModal: (folderName: string) => void;
   onOpenDeleteFolderModal: (folderName: string) => void;
   onViewFolder?: (folderName: string) => void;
+  previewFolder?: string | null;
 }
 
 export function DaftarFolder({
@@ -30,7 +31,10 @@ export function DaftarFolder({
   onOpenRenameFolderModal,
   onOpenDeleteFolderModal,
   onViewFolder,
+  previewFolder,
 }: DaftarFolderProps) {
+  const isPreviewing = (name: string) =>
+    !!previewFolder && previewFolder.toLowerCase() === name.toLowerCase();
   return (
     <div className="space-y-3.5 animate-in fade-in duration-150">
       {/* Tombol Buat Folder Baru */}
@@ -95,20 +99,19 @@ export function DaftarFolder({
                     >
                       <MoreVertical className="w-4 h-4" />
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-36 text-xs">
+                    <DropdownMenuContent align="end" className="w-44 text-xs">
                       <DropdownMenuItem
-                        onClick={() => {
-                          if (onViewFolder) {
-                            onViewFolder(folderName);
-                          } else {
-                            onOpenFolder(folderName);
-                          }
-                        }}
+                        onClick={() => onViewFolder?.(folderName)}
                         className="cursor-pointer flex items-center gap-2"
                       >
-                        <Eye className="w-3.5 h-3.5 text-primary" />
-                        <span>Lihat</span>
+                        {isPreviewing(folderName) ? (
+                          <EyeOff className="w-3.5 h-3.5 text-primary" />
+                        ) : (
+                          <Eye className="w-3.5 h-3.5 text-primary" />
+                        )}
+                        <span>{isPreviewing(folderName) ? "Tampilkan Semua" : "Lihat di Peta"}</span>
                       </DropdownMenuItem>
+                      <DropdownMenuSeparator />
                       <DropdownMenuItem
                         onClick={() => {
                           const target = folderName;
@@ -163,30 +166,7 @@ export function DaftarFolder({
             </div>
           </div>
 
-          <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary cursor-pointer transition-colors"
-                title="Opsi Folder"
-              >
-                <MoreVertical className="w-4 h-4" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-36 text-xs">
-                <DropdownMenuItem
-                  onClick={() => {
-                    if (onViewFolder) {
-                      onViewFolder("Tanpa Folder");
-                    } else {
-                      onOpenFolder("Tanpa Folder");
-                    }
-                  }}
-                  className="cursor-pointer flex items-center gap-2"
-                >
-                  <Eye className="w-3.5 h-3.5 text-primary" />
-                  <span>Lihat</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+          <div className="flex items-center gap-1 shrink-0">
             <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition-all" />
           </div>
         </div>

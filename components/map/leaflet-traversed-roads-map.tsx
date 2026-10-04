@@ -8,7 +8,32 @@ import {
   AlternativeRouteOption,
 } from "@/lib/road-routing";
 import { getLetterLabel } from "@/app/distance-routing/tipe";
-import { Trash2, Loader2, Link2, Unlink, Check, Eye, MoveUp, MoveDown, Edit3, X } from "lucide-react";
+import { Trash2, Loader2, Link2, Unlink, Check, Eye, MoveUp, MoveDown, Edit3, X, Zap } from "lucide-react";
+
+export type RouteGeoJsonObject = {
+  type: string;
+  coordinates: [number, number][] | [number, number][][];
+};
+
+export function parseRouteGeoJSON(raw: unknown): RouteGeoJsonObject | null {
+  if (!raw) return null;
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && Array.isArray((parsed as Record<string, unknown>).coordinates)) {
+        return parsed as RouteGeoJsonObject;
+      }
+    } catch {
+      return null;
+    }
+  } else if (typeof raw === "object" && raw !== null && "coordinates" in raw) {
+    const obj = raw as { type?: unknown; coordinates?: unknown };
+    if (Array.isArray(obj.coordinates)) {
+      return raw as RouteGeoJsonObject;
+    }
+  }
+  return null;
+}
 
 export interface TraversedRoadRecord {
   id: number;
@@ -27,15 +52,12 @@ export interface TraversedRoadRecord {
   weight: number;
   opacity: number;
   line_style: "solid" | "dashed" | "dotted" | string;
-  marker_style?: "numbers" | "letters" | "none" | "icon" | string;
-  connection_mode?: "sequential" | "nearest" | "direct_line" | string;
+  marker_style?: "numbers" | "letters" | "none" | "icon" | "dot" | "random" | string;
+  connection_mode?: "sequential" | "nearest" | "direct_line" | "loop_closed" | "smart_direct" | string;
   travel_mode?: string;
   category?: string;
   description?: string;
-  geojson?: {
-    type: string;
-    coordinates: [number, number][] | [number, number][][]; // [lng, lat] LineString atau MultiLineString
-  };
+  geojson?: RouteGeoJsonObject | string | Record<string, unknown>;
   created_at?: string;
   updated_at?: string;
   isVisible?: boolean;
@@ -57,7 +79,7 @@ export interface LeafletTraversedRoadsMapProps {
   customWeight: number;
   customOpacity: number;
   customLineStyle: "solid" | "dashed" | "dotted" | string;
-  markerStyle?: "numbers" | "letters" | "none" | "icon";
+  markerStyle?: "numbers" | "letters" | "none" | "icon" | "pin" | "dot" | "random";
 
   // Mode & Handlers
   isAddPointMode: boolean;
@@ -69,9 +91,10 @@ export interface LeafletTraversedRoadsMapProps {
   onRemoveWaypoint?: (index: number) => void;
   onMoveWaypoint?: (index: number, direction: "up" | "down") => void;
   onToggleDisconnectWaypoint?: (index: number) => void;
-  onConnectWaypointToNearest?: (index: number) => void;
+  onConnectWaypointToNearest?: (index: number, mode?: "road" | "direct") => void;
   onUpdateWaypointName?: (index: number, newName: string) => void;
   hideWaypointsOnMap?: boolean;
+  isPositionLocked?: boolean;
   focusedRouteId?: number | null;
   focusedFolder?: string | null;
   zoomTargetRouteId?: { id: number; timestamp: number } | null;
@@ -117,6 +140,7 @@ export function LeafletTraversedRoadsMap({
   onConnectWaypointToNearest,
   onUpdateWaypointName,
   hideWaypointsOnMap = false,
+  isPositionLocked = true,
   onRouteLineClick,
   onSelectRoute,
   onDeleteRoute,
@@ -151,6 +175,7 @@ export function LeafletTraversedRoadsMap({
   });
 
   const [L, setL] = React.useState<typeof LType | null>(null);
+  const [isMapReady, setIsMapReady] = React.useState(false);
 
   // Dynamic import Leaflet
   React.useEffect(() => {
@@ -202,6 +227,7 @@ export function LeafletTraversedRoadsMap({
     onToggleDisconnectWaypoint,
     onConnectWaypointToNearest,
     onUpdateWaypointName,
+    isPositionLocked,
     onRouteLineClick,
     onSelectAlternativeRoute,
     onSelectRoute,
@@ -220,6 +246,7 @@ export function LeafletTraversedRoadsMap({
       onToggleDisconnectWaypoint,
       onConnectWaypointToNearest,
       onUpdateWaypointName,
+      isPositionLocked,
       onRouteLineClick,
       onSelectAlternativeRoute,
       onSelectRoute,
@@ -343,6 +370,15 @@ export function LeafletTraversedRoadsMap({
     }
 
     mapInstanceRef.current = map;
+    setIsMapReady(true);
+
+    map.whenReady(() => {
+      setIsMapReady(true);
+      map.invalidateSize({ pan: false });
+      setTimeout(() => map.invalidateSize({ pan: false }), 60);
+      setTimeout(() => map.invalidateSize({ pan: false }), 200);
+      setTimeout(() => map.invalidateSize({ pan: false }), 500);
+    });
 
     return () => {
       resizeObserver.disconnect();
@@ -356,6 +392,7 @@ export function LeafletTraversedRoadsMap({
       }
       map.remove();
       mapInstanceRef.current = null;
+      setIsMapReady(false);
     };
   }, [L, createTileLayer, initialBasemapId]);
 
@@ -396,20 +433,25 @@ export function LeafletTraversedRoadsMap({
       if (activeRouteId && route.id === activeRouteId) return;
 
       let latlngs: LType.LatLngExpression[] | LType.LatLngExpression[][] = [];
+      const geojsonObj = parseRouteGeoJSON(route.geojson);
 
-      if (route.geojson && Array.isArray(route.geojson.coordinates) && route.geojson.coordinates.length > 0) {
-        const firstElem = route.geojson.coordinates[0];
+      if (geojsonObj && Array.isArray(geojsonObj.coordinates) && geojsonObj.coordinates.length > 0) {
+        const firstElem = geojsonObj.coordinates[0];
         const isMulti =
-          route.geojson.type === "MultiLineString" ||
+          geojsonObj.type === "MultiLineString" ||
           (Array.isArray(firstElem) && Array.isArray((firstElem as unknown as [number, number])[0]));
 
         if (isMulti) {
-          latlngs = (route.geojson.coordinates as [number, number][][]).map((seg) =>
+          latlngs = (geojsonObj.coordinates as [number, number][][]).map((seg) =>
             seg.map((c) => [c[1], c[0]] as [number, number])
           );
         } else {
-          latlngs = (route.geojson.coordinates as [number, number][]).map((c) => [c[1], c[0]] as [number, number]);
+          latlngs = (geojsonObj.coordinates as [number, number][]).map((c) => [c[1], c[0]] as [number, number]);
         }
+      } else if (Array.isArray(route.waypoints) && route.waypoints.length >= 2) {
+        latlngs = route.waypoints
+          .filter((w) => w && !isNaN(w.lat) && !isNaN(w.lng) && !(w.lat === 0 && w.lng === 0))
+          .map((w) => [w.lat, w.lng] as [number, number]);
       } else if (route.origin_lat && route.destination_lat) {
         latlngs = [
           [route.origin_lat, route.origin_lng],
@@ -513,7 +555,11 @@ export function LeafletTraversedRoadsMap({
       routePolylineMapRef.current.set(route.id, mainPolyline);
       group.addLayer(mainPolyline);
     });
-  }, [L, routes, focusedRouteId, activeRouteId]);
+
+    if (routes.length > 0) {
+      mapInstanceRef.current?.invalidateSize({ pan: false });
+    }
+  }, [L, isMapReady, routes, focusedRouteId, activeRouteId]);
 
   // Render Draft Multi-Point Route Line
   React.useEffect(() => {
@@ -575,7 +621,7 @@ export function LeafletTraversedRoadsMap({
     });
 
     group.addLayer(draftPolyline);
-  }, [L, draftPathCoordinates, customColor, customWeight, customOpacity, customLineStyle, isCalculatingRoute, waypoints.length]);
+  }, [L, isMapReady, draftPathCoordinates, customColor, customWeight, customOpacity, customLineStyle, isCalculatingRoute, waypoints.length]);
 
   // Render Alternative Routes (Clickable to switch route)
   React.useEffect(() => {
@@ -629,7 +675,7 @@ export function LeafletTraversedRoadsMap({
 
       group.addLayer(altPolyline);
     });
-  }, [L, alternativeRoutes, selectedAlternativeId]);
+  }, [L, isMapReady, alternativeRoutes, selectedAlternativeId]);
 
   // Render Multi-Point Waypoint Markers
   React.useEffect(() => {
@@ -650,7 +696,7 @@ export function LeafletTraversedRoadsMap({
       const pointNumber = index + 1;
 
       // Color badge: Branch T (Teal), Disconnected (Amber), Start (Emerald), End (Rose), Intermediate (Sky Blue)
-      const bgColor = isBranch
+      let bgColor = isBranch
         ? "bg-teal-600"
         : isDisconnected
         ? "bg-amber-600"
@@ -660,36 +706,40 @@ export function LeafletTraversedRoadsMap({
         ? "bg-rose-500"
         : "bg-sky-500";
 
-      const ringColor = isBranch
-        ? "ring-teal-500/30"
-        : isDisconnected
-        ? "ring-amber-500/30"
-        : isStart
-        ? "ring-emerald-500/30"
-        : isEnd
-        ? "ring-rose-500/30"
-        : "ring-sky-500/30";
+      const RANDOM_PALETTES = [
+        "bg-indigo-600",
+        "bg-emerald-600",
+        "bg-amber-600",
+        "bg-rose-600",
+        "bg-cyan-600",
+        "bg-purple-600",
+        "bg-orange-600",
+        "bg-teal-600",
+      ];
 
-      const arrowBg = isBranch
-        ? "bg-teal-700"
-        : isDisconnected
-        ? "bg-amber-700"
-        : isStart
-        ? "bg-emerald-600"
-        : isEnd
-        ? "bg-rose-600"
-        : "bg-sky-600";
+      if (markerStyle === "random") {
+        bgColor = RANDOM_PALETTES[index % RANDOM_PALETTES.length];
+      }
 
       const typeBadgeText = isBranch ? " (Terhubung)" : isDisconnected ? " (Jalan Lain)" : "";
 
-      // Konten dalam badge: nomor, huruf, kosong (dot polos), atau ikon pin
+      // Konten dalam badge: nomor, huruf, kosong (dot polos), ikon pin, atau random
       let badgeContent = "";
       if (markerStyle === "letters") {
         badgeContent = getLetterLabel(index);
-      } else if (markerStyle === "none") {
+      } else if (markerStyle === "none" || markerStyle === "dot") {
         badgeContent = "";
-      } else if (markerStyle === "icon") {
+      } else if (markerStyle === "icon" || markerStyle === "pin") {
         badgeContent = `<svg class="w-3.5 h-3.5 inline-block fill-current" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`;
+      } else if (markerStyle === "random") {
+        const randomSymbols = [
+          `${pointNumber}`,
+          getLetterLabel(index),
+          `<svg class="w-3.5 h-3.5 inline-block fill-current" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>`,
+          `<svg class="w-3.5 h-3.5 inline-block fill-current" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`,
+          `<svg class="w-3.5 h-3.5 inline-block fill-current" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>`
+        ];
+        badgeContent = randomSymbols[index % randomSymbols.length];
       } else {
         badgeContent = `${pointNumber}`;
       }
@@ -699,37 +749,52 @@ export function LeafletTraversedRoadsMap({
         ? `Titik ${getLetterLabel(index)}`
         : `Titik ${pointNumber}`;
 
-      const isNoneStyle = markerStyle === "none";
       let wpIcon: LType.DivIcon;
 
-      if (isNoneStyle) {
+      if (markerStyle === "none") {
         // Mode None: Bersih 100%. Hanya klik di peta untuk menghubungkan jalan.
-        // Tidak ada pin besar atau label text box yang menutupi jalan!
         wpIcon = L.divIcon({
           className: "custom-waypoint-marker-none",
           html: `
-            <div class="relative group cursor-pointer w-4 h-4 -ml-2 -mt-2 flex items-center justify-center">
+            <div class="relative group cursor-pointer w-4 h-4 flex items-center justify-center">
               <div class="w-2.5 h-2.5 rounded-full bg-primary/80 opacity-0 group-hover:opacity-100 transition-opacity ring-2 ring-white shadow"></div>
             </div>
           `,
           iconSize: [16, 16],
           iconAnchor: [8, 8],
         });
+      } else if (markerStyle === "dot") {
+        // Mode Dot: Titik lingkaran minimalis modern tanpa panah
+        wpIcon = L.divIcon({
+          className: "custom-waypoint-marker-dot",
+          html: `
+            <div class="relative group cursor-grab active:cursor-grabbing w-5 h-5 flex items-center justify-center">
+              <div class="w-4 h-4 rounded-full ${bgColor} ring-2 ring-white shadow-md flex items-center justify-center transition-transform group-hover:scale-125">
+                <div class="w-1.5 h-1.5 rounded-full bg-white"></div>
+              </div>
+              <span class="absolute top-6 left-1/2 -translate-x-1/2 whitespace-nowrap bg-background/95 backdrop-blur border border-border text-[10px] font-medium px-2 py-0.5 rounded shadow text-foreground pointer-events-none max-w-36 truncate hidden group-hover:block z-50 text-center">
+                ${pointLabel}: ${wp.name || "Titik"}${typeBadgeText}
+              </span>
+            </div>
+          `,
+          iconSize: [20, 20],
+          iconAnchor: [10, 10],
+        });
       } else {
-        const sizeClass = "w-8 h-8";
-        const iconSize: [number, number] = [32, 32];
-        const iconAnchor: [number, number] = [16, 32];
+        // Semua gaya berpusat tepat di koordinat titik (anchor tengah) agar posisi konsisten antar gaya
+        const sizeClass = "w-7 h-7";
+        const iconSize: [number, number] = [28, 28];
+        const iconAnchor: [number, number] = [14, 14];
 
         wpIcon = L.divIcon({
           className: "custom-waypoint-marker",
           html: `
-            <div class="relative group cursor-grab active:cursor-grabbing">
-              <div class="${sizeClass} rounded-full ${bgColor} text-white font-bold text-xs flex items-center justify-center shadow-lg ring-4 ${ringColor} transition-transform transform group-hover:scale-110">
+            <div class="relative group cursor-grab active:cursor-grabbing w-7 h-7 flex items-center justify-center">
+              <div class="${sizeClass} rounded-full ${bgColor} text-white font-bold text-xs leading-none flex items-center justify-center shadow-lg ring-2 ring-white transition-transform transform group-hover:scale-110">
                 ${badgeContent}
               </div>
-              <div class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 ${arrowBg} rotate-45"></div>
               <!-- Tooltip nama titik hanya tampil saat di-hover agar jalan tetap bersih tanpa tertutup box teks -->
-              <span class="absolute top-9 left-1/2 -translate-x-1/2 whitespace-nowrap bg-background/95 backdrop-blur border border-border text-[10px] font-medium px-2 py-0.5 rounded shadow text-foreground pointer-events-none max-w-36 truncate hidden group-hover:block z-50 text-center">
+              <span class="absolute top-8 left-1/2 -translate-x-1/2 whitespace-nowrap bg-background/95 backdrop-blur border border-border text-[10px] font-medium px-2 py-0.5 rounded shadow text-foreground pointer-events-none max-w-36 truncate hidden group-hover:block z-50 text-center">
                 ${pointLabel}: ${wp.name || "Titik Rute"}${typeBadgeText}
               </span>
             </div>
@@ -741,8 +806,8 @@ export function LeafletTraversedRoadsMap({
 
       const marker = L.marker([wp.lat, wp.lng], {
         icon: wpIcon,
-        draggable: true,
-        title: `${pointLabel}: ${wp.name || ""} (Klik kanan untuk opsi cabang/pisah)`,
+        draggable: !isPositionLocked,
+        title: `${pointLabel}: ${wp.name || ""}${isPositionLocked ? " (Posisi Terkunci)" : " (Bisa Digeser)"} - Klik kanan untuk opsi`,
       });
 
       marker.on("dragend", (e: LType.DragEndEvent) => {
@@ -780,7 +845,7 @@ export function LeafletTraversedRoadsMap({
 
       group.addLayer(marker);
     });
-  }, [L, waypoints, hideWaypointsOnMap, markerStyle]);
+  }, [L, isMapReady, waypoints, hideWaypointsOnMap, markerStyle, isPositionLocked]);
 
   const handledTimestampsRef = React.useRef<{
     route?: number;
@@ -802,11 +867,12 @@ export function LeafletTraversedRoadsMap({
     if (!targetRoute) return;
 
     // Cek koordinat geojson rute
-    const coords = targetRoute.geojson?.coordinates;
+    const geojsonObj = parseRouteGeoJSON(targetRoute.geojson);
+    const coords = geojsonObj?.coordinates;
     if (Array.isArray(coords) && coords.length > 0) {
       const firstElem = coords[0];
       const isMulti =
-        targetRoute.geojson?.type === "MultiLineString" ||
+        geojsonObj?.type === "MultiLineString" ||
         (Array.isArray(firstElem) && Array.isArray((firstElem as unknown as [number, number])[0]));
 
       const flatCoords = isMulti
@@ -887,10 +953,11 @@ export function LeafletTraversedRoadsMap({
 
     const allPoints: [number, number][] = [];
     folderRoutes.forEach((route) => {
-      const coords = route.geojson?.coordinates;
+      const geojsonObj = parseRouteGeoJSON(route.geojson);
+      const coords = geojsonObj?.coordinates;
       if (Array.isArray(coords) && coords.length > 0) {
         const isMulti =
-          route.geojson?.type === "MultiLineString" ||
+          geojsonObj?.type === "MultiLineString" ||
           (Array.isArray(coords[0]) && Array.isArray((coords as unknown[][])[0][0]));
 
         const flatCoords = isMulti
@@ -1143,65 +1210,95 @@ export function LeafletTraversedRoadsMap({
               </div>
             )}
 
-            {/* Opsi khusus titik ke-2 dst (bukan titik awal) */}
-            {waypointContextMenu.index > 0 && (
+            {/* Opsi cabang / pisah rute jika titik lebih dari 1 */}
+            {waypoints.length > 1 && (
               <div className="space-y-0.5 mb-1 border-b border-border/60 pb-1">
-                {/* Opsi 1: Hubungkan ke Jalur / Titik Terdekat */}
+                {/* Opsi 1: Hubungkan ke Jalur Terdekat (Ikuti Jalan) */}
                 <button
                   type="button"
                   onClick={() => {
                     const idx = waypointContextMenu.index;
                     closeWaypointContextMenu();
-                    callbacksRef.current.onConnectWaypointToNearest?.(idx);
+                    callbacksRef.current.onConnectWaypointToNearest?.(idx, "road");
                   }}
                   className={`w-full flex items-center justify-between px-2 py-1.5 text-xs rounded-lg cursor-pointer transition-colors text-left ${
                     waypointContextMenu.wp.connectionType === "nearest_branch"
                       ? "bg-teal-500/15 text-teal-700 dark:text-teal-300 font-semibold"
                       : "text-foreground hover:bg-secondary/80 font-medium"
                   }`}
-                  title="Hubungkan titik ini langsung ke jalur atau titik terdekat tanpa membuat rute terpisah"
+                  title="Hubungkan ke jalan terdekat mengikuti lekukan jalan resmi"
                 >
                   <div className="flex items-center gap-2">
                     <Link2 className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
-                    <span>Hubungkan ke Jalur / Titik Terdekat</span>
+                    <span>Hubungkan ke Jalur (Ikuti Jalan)</span>
                   </div>
                   {waypointContextMenu.wp.connectionType === "nearest_branch" && (
                     <Check className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
                   )}
                 </button>
 
-                {/* Opsi 2: Buat Jalan Lain (Pisah Rute) / Sambungkan Kembali */}
+                {/* Opsi 2: Hubungkan Langsung ke Jalur Terdekat (Snap Cepat) */}
                 <button
                   type="button"
                   onClick={() => {
                     const idx = waypointContextMenu.index;
                     closeWaypointContextMenu();
-                    callbacksRef.current.onToggleDisconnectWaypoint?.(idx);
+                    callbacksRef.current.onConnectWaypointToNearest?.(idx, "direct");
                   }}
                   className={`w-full flex items-center justify-between px-2 py-1.5 text-xs rounded-lg cursor-pointer transition-colors text-left ${
-                    waypointContextMenu.wp.connectionType === "disconnected" || waypointContextMenu.wp.isDisconnected
-                      ? "bg-amber-500/15 text-amber-700 dark:text-amber-300 font-semibold"
+                    waypointContextMenu.wp.connectionType === "direct_snap"
+                      ? "bg-blue-500/15 text-blue-700 dark:text-blue-300 font-semibold"
                       : "text-foreground hover:bg-secondary/80 font-medium"
                   }`}
-                  title="Putus hubungan dengan titik sebelumnya tanpa membuat jalur memutar"
+                  title="Hubungkan langsung ke garis jalan terdekat tanpa memutar satu arah atau pembatas jalan"
                 >
                   <div className="flex items-center gap-2">
-                    {waypointContextMenu.wp.connectionType === "disconnected" || waypointContextMenu.wp.isDisconnected ? (
-                      <>
-                        <Link2 className="w-3.5 h-3.5 text-primary shrink-0" />
-                        <span>Sambungkan ke Titik Sebelumnya</span>
-                      </>
-                    ) : (
-                      <>
-                        <Unlink className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
-                        <span>Buat Jalan Lain (Pisah Rute)</span>
-                      </>
-                    )}
+                    <Zap className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                    <span>Hubungkan Langsung (Snap Cepat)</span>
                   </div>
-                  {(waypointContextMenu.wp.connectionType === "disconnected" || waypointContextMenu.wp.isDisconnected) && (
-                    <Check className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                  {waypointContextMenu.wp.connectionType === "direct_snap" && (
+                    <Check className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
                   )}
                 </button>
+
+                {/* Opsi 2: Pisahkan Rute (Jalan Baru) / Sambungkan Kembali */}
+                {(() => {
+                  const targetIdx = waypointContextMenu.index === 0 ? 1 : waypointContextMenu.index;
+                  const targetWp = waypoints[targetIdx] || waypointContextMenu.wp;
+                  const isTargetDisc = targetWp.connectionType === "disconnected" || targetWp.isDisconnected;
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        closeWaypointContextMenu();
+                        callbacksRef.current.onToggleDisconnectWaypoint?.(targetIdx);
+                      }}
+                      className={`w-full flex items-center justify-between px-2 py-1.5 text-xs rounded-lg cursor-pointer transition-colors text-left ${
+                        isTargetDisc
+                          ? "bg-amber-500/15 text-amber-700 dark:text-amber-300 font-semibold"
+                          : "text-foreground hover:bg-secondary/80 font-medium"
+                      }`}
+                      title="Pisahkan rute jalan atau sambungkan kembali"
+                    >
+                      <div className="flex items-center gap-2">
+                        {isTargetDisc ? (
+                          <>
+                            <Link2 className="w-3.5 h-3.5 text-primary shrink-0" />
+                            <span>Sambungkan Rute</span>
+                          </>
+                        ) : (
+                          <>
+                            <Unlink className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                            <span>Pisahkan Rute (Jalan Baru)</span>
+                          </>
+                        )}
+                      </div>
+                      {isTargetDisc && (
+                        <Check className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                      )}
+                    </button>
+                  );
+                })()}
               </div>
             )}
 

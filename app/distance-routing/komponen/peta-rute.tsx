@@ -67,9 +67,10 @@ interface PetaRuteProps {
   onRemoveWaypoint?: (index: number) => void;
   onMoveWaypoint?: (index: number, direction: "up" | "down") => void;
   onToggleDisconnectWaypoint?: (index: number) => void;
-  onConnectWaypointToNearest?: (index: number) => void;
+  onConnectWaypointToNearest?: (index: number, mode?: "road" | "direct") => void;
   onUpdateWaypointName?: (index: number, newName: string) => void;
   hideWaypointsOnMap?: boolean;
+  isPositionLocked?: boolean;
 }
 
 export function PetaRute({
@@ -109,6 +110,7 @@ export function PetaRute({
   onConnectWaypointToNearest,
   onUpdateWaypointName,
   hideWaypointsOnMap,
+  isPositionLocked = true,
 }: PetaRuteProps) {
   return (
     <main className="flex-1 h-full w-full relative overflow-hidden bg-muted/10">
@@ -147,6 +149,7 @@ export function PetaRute({
         onConnectWaypointToNearest={onConnectWaypointToNearest}
         onUpdateWaypointName={onUpdateWaypointName}
         hideWaypointsOnMap={hideWaypointsOnMap}
+        isPositionLocked={isPositionLocked}
         onRouteLineClick={onRouteLineClick}
         insertModeInfo={insertModeInfo}
         onCancelInsertMode={onCancelInsertMode}

@@ -1,10 +1,12 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { Check, AlertTriangle, X } from "lucide-react";
 import {
   calculateMultiPointRoadRoute,
   reverseGeocodeRoadName,
+  clearOsrmCache,
 } from "@/lib/road-routing";
 
 // Import Konfigurasi & Tipe Data
@@ -18,6 +20,7 @@ import {
   MarkerStyle,
   LineStyle,
   ToastMessage,
+  parseRouteGeoJSON,
 } from "./tipe";
 
 // Import Layanan API Backend Modul 5
@@ -38,12 +41,15 @@ import { DaftarRuteFolder } from "./komponen/daftar-rute-folder";
 import { TambahRute } from "./komponen/tambah-rute";
 import { ModalFolder } from "./komponen/modal-folder";
 import { ModalRute } from "./komponen/modal-rute";
+import { ModalPindahFolder } from "./komponen/modal-pindah-folder";
 import { PetaRute } from "./komponen/peta-rute";
 
 // Kunci penyimpanan sesi edit aktif rute di localStorage
 const ACTIVE_EDIT_SESSION_KEY = "dr_active_edit_session";
 
 export default function DistanceRoutingPage() {
+  const router = useRouter();
+
   // State Tampilan & Navigasi Panel Samping
   const [isSidePanelOpen, setIsSidePanelOpen] = React.useState(true);
   const [folderSubTab, setFolderSubTab] = React.useState<"add-route" | "routes-list">("routes-list");
@@ -60,6 +66,8 @@ export default function DistanceRoutingPage() {
   const [focusedFolder, setFocusedFolder] = React.useState<string | null>(null);
   const [zoomTargetRouteId, setZoomTargetRouteId] = React.useState<{ id: number; timestamp: number } | null>(null);
   const [zoomTargetFolder, setZoomTargetFolder] = React.useState<{ name: string; timestamp: number } | null>(null);
+  // Folder yang sedang dilihat di peta (tanpa membuka folder), null = tampilkan semua rute
+  const [previewFolder, setPreviewFolder] = React.useState<string | null>(null);
   const [zoomTargetPoint, setZoomTargetPoint] = React.useState<{ lat: number; lng: number; timestamp: number } | null>(null);
   const [zoomTargetDraftRoute, setZoomTargetDraftRoute] = React.useState<{ timestamp: number } | null>(null);
 
@@ -85,6 +93,7 @@ export default function DistanceRoutingPage() {
 
   // State Aksi & Notifikasi Toast
   const [hideWaypointsOnMap, setHideWaypointsOnMap] = React.useState(false);
+  const [isPositionLocked, setIsPositionLocked] = React.useState(true);
   const [isSaving, setIsSaving] = React.useState(false);
   const [toastMessage, setToastMessage] = React.useState<ToastMessage | null>(null);
   const [activeRouteId, setActiveRouteId] = React.useState<number | null>(null);
@@ -129,6 +138,20 @@ export default function DistanceRoutingPage() {
   // State Modal Tambah Rute Baru (Alur: Tambah nama folder -> Tambah nama rute -> Baru edit rute)
   const [isNewRouteModalOpen, setIsNewRouteModalOpen] = React.useState(false);
   const [newRouteNameInput, setNewRouteNameInput] = React.useState("");
+
+  // State Modal Pindahkan Rute ke Folder
+  const [isMoveFolderModalOpen, setIsMoveFolderModalOpen] = React.useState(false);
+  const [moveTargetRoute, setMoveTargetRoute] = React.useState<TraversedRoadRecord | null>(null);
+
+  // State Riwayat Undo & Redo (Rudo dan Endo Titik & Viewport)
+  interface HistorySnapshot {
+    waypoints: WaypointItem[];
+    connectionMode: ConnectionMode;
+    markerStyle: MarkerStyle;
+    targetPoint?: { lat: number; lng: number } | null;
+  }
+  const [undoStack, setUndoStack] = React.useState<HistorySnapshot[]>([]);
+  const [redoStack, setRedoStack] = React.useState<HistorySnapshot[]>([]);
 
   // Helper Notifikasi Toast
   const showToast = (text: string, type: "success" | "error" = "success") => {
@@ -182,13 +205,13 @@ export default function DistanceRoutingPage() {
                 : DEFAULT_ROUTE_CONFIG.lineStyle;
               setCustomLineStyle(style);
 
-              const validMarkerStyles: MarkerStyle[] = ["numbers", "letters", "none", "icon"];
+              const validMarkerStyles: MarkerStyle[] = ["numbers", "letters", "none", "icon", "pin", "dot", "random"];
               const mStyle: MarkerStyle = validMarkerStyles.includes(target.marker_style as MarkerStyle)
                 ? (target.marker_style as MarkerStyle)
                 : DEFAULT_ROUTE_CONFIG.markerStyle;
               setMarkerStyle(mStyle);
 
-              const validConnModes: ConnectionMode[] = ["sequential", "nearest", "direct_line"];
+              const validConnModes: ConnectionMode[] = ["sequential", "nearest", "direct_line", "loop_closed", "smart_direct"];
               const cMode: ConnectionMode = validConnModes.includes(target.connection_mode as ConnectionMode)
                 ? (target.connection_mode as ConnectionMode)
                 : DEFAULT_ROUTE_CONFIG.connectionMode;
@@ -216,10 +239,11 @@ export default function DistanceRoutingPage() {
               setSelectedAlternativeId(null);
               setFocusedRouteId(target.id);
 
-              if (target.geojson && Array.isArray(target.geojson.coordinates) && target.geojson.coordinates.length > 0) {
-                const coords = target.geojson.coordinates;
+              const targetGeojson = parseRouteGeoJSON(target.geojson);
+              if (targetGeojson && Array.isArray(targetGeojson.coordinates) && targetGeojson.coordinates.length > 0) {
+                const coords = targetGeojson.coordinates;
                 const isMulti =
-                  target.geojson.type === "MultiLineString" ||
+                  targetGeojson.type === "MultiLineString" ||
                   (Array.isArray(coords[0]) && Array.isArray((coords as unknown[][])[0][0]));
 
                 const leafletPoints = isMulti
@@ -495,6 +519,44 @@ export default function DistanceRoutingPage() {
     flushSave,
   ]);
 
+  // Ekstrak semua koordinat rute lain di peta untuk menghubungkan titik cabang ke rute terdekat
+  const otherRoutesCoordinates = React.useMemo(() => {
+    const list: [number, number][][] = [];
+    routes.forEach((r) => {
+      if (r.id === activeRouteId) return; // Lewati rute yang sedang diedit
+      const routeGeojson = parseRouteGeoJSON(r.geojson);
+      const coords = routeGeojson?.coordinates;
+      if (Array.isArray(coords) && coords.length > 0) {
+        const firstElem = coords[0];
+        const isMulti =
+          routeGeojson?.type === "MultiLineString" ||
+          (Array.isArray(firstElem) && Array.isArray((firstElem as unknown as number[])[0]));
+
+        if (isMulti) {
+          (coords as unknown as number[][][]).forEach((seg) => {
+            if (Array.isArray(seg)) {
+              const validSeg = seg
+                .filter((c) => Array.isArray(c) && c.length >= 2 && !isNaN(c[0]) && !isNaN(c[1]))
+                .map((c) => [c[1], c[0]] as [number, number]);
+              if (validSeg.length >= 2) list.push(validSeg);
+            }
+          });
+        } else {
+          const validSeg = (coords as unknown as number[][])
+            .filter((c) => Array.isArray(c) && c.length >= 2 && !isNaN(c[0]) && !isNaN(c[1]))
+            .map((c) => [c[1], c[0]] as [number, number]);
+          if (validSeg.length >= 2) list.push(validSeg);
+        }
+      } else if (Array.isArray(r.waypoints) && r.waypoints.length >= 2) {
+        const validWps = r.waypoints
+          .filter((w) => w && !isNaN(w.lat) && !isNaN(w.lng) && !(w.lat === 0 && w.lng === 0))
+          .map((w) => [w.lat, w.lng] as [number, number]);
+        if (validWps.length >= 2) list.push(validWps);
+      }
+    });
+    return list;
+  }, [routes, activeRouteId]);
+
   // Kunci koordinat titik & tipe sambungan jalan untuk mencegah kalkulasi OSRM berlebih
   const waypointsCoordKey = React.useMemo(
     () =>
@@ -514,7 +576,7 @@ export default function DistanceRoutingPage() {
     if (waypoints.length < 2) return;
 
     let isMounted = true;
-    calculateMultiPointRoadRoute(waypoints, connectionMode)
+    calculateMultiPointRoadRoute(waypoints, connectionMode, otherRoutesCoordinates)
       .then((res) => {
         if (!isMounted) return;
         setDraftRouteData(res);
@@ -534,12 +596,75 @@ export default function DistanceRoutingPage() {
       isMounted = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [waypointsCoordKey, connectionMode]);
+  }, [waypointsCoordKey, connectionMode, otherRoutesCoordinates.length]);
+
+  // Fungsi Riwayat Perubahan (Undo & Redo)
+  const pushHistorySnapshot = React.useCallback(() => {
+    setUndoStack((prev) => [
+      ...prev.slice(-30),
+      {
+        waypoints: JSON.parse(JSON.stringify(waypoints)),
+        connectionMode,
+        markerStyle,
+        targetPoint: zoomTargetPoint ? { lat: zoomTargetPoint.lat, lng: zoomTargetPoint.lng } : null,
+      },
+    ]);
+    setRedoStack([]);
+  }, [waypoints, connectionMode, markerStyle, zoomTargetPoint]);
 
   const handleConnectionModeChange = React.useCallback((mode: ConnectionMode) => {
+    pushHistorySnapshot();
+    clearOsrmCache();
     setIsCalculatingRoute(true);
     setConnectionMode(mode);
-  }, []);
+  }, [pushHistorySnapshot]);
+
+  const handleUndo = React.useCallback(() => {
+    if (undoStack.length === 0) return;
+    const previous = undoStack[undoStack.length - 1];
+    const newUndoStack = undoStack.slice(0, undoStack.length - 1);
+
+    // Jika perubahan dibatalkan kembali ke kondisi awal (awal rute), reset redo agar nol dan tidak aktif
+    if (newUndoStack.length === 0) {
+      setRedoStack([]);
+    } else {
+      const current: HistorySnapshot = {
+        waypoints: JSON.parse(JSON.stringify(waypoints)),
+        connectionMode,
+        markerStyle,
+        targetPoint: null,
+      };
+      setRedoStack((prev) => [...prev, current]);
+    }
+    setUndoStack(newUndoStack);
+
+    // Kembalikan posisi titik, mode koneksi & gaya marker tanpa mengubah zoom kamera peta
+    setWaypoints(previous.waypoints);
+    setConnectionMode(previous.connectionMode);
+    setMarkerStyle(previous.markerStyle);
+    // CATATAN: Tidak memanggil setZoomTargetPoint agar peta tidak melompat/zoom ke titik lain,
+    // sehingga pengguna dapat melihat langsung titik kembali ke posisi semula di layar.
+    showToast("Perubahan dibatalkan (Undo)", "success");
+  }, [undoStack, waypoints, connectionMode, markerStyle]);
+
+  const handleRedo = React.useCallback(() => {
+    if (redoStack.length === 0) return;
+    const next = redoStack[redoStack.length - 1];
+    const current: HistorySnapshot = {
+      waypoints: JSON.parse(JSON.stringify(waypoints)),
+      connectionMode,
+      markerStyle,
+      targetPoint: null,
+    };
+    setUndoStack((prev) => [...prev, current]);
+    setRedoStack((prev) => prev.slice(0, prev.length - 1));
+
+    setWaypoints(next.waypoints);
+    setConnectionMode(next.connectionMode);
+    setMarkerStyle(next.markerStyle);
+    // Tidak memicu zoom peta agar posisi tetap stabil
+    showToast("Perubahan diulangi (Redo)", "success");
+  }, [redoStack, waypoints, connectionMode, markerStyle]);
 
   // 3. Interaksi Klik Peta untuk Menambah Titik Secara Berurutan (Append)
   const handleMapClick = async (lat: number, lng: number) => {
@@ -548,6 +673,8 @@ export default function DistanceRoutingPage() {
     if (!selectedFolder) {
       setSelectedFolder(targetFolder || "Utama");
     }
+
+    pushHistorySnapshot();
 
     // Pastikan tidak ada target zoom yang tertunda yang mengganggu klik penambahan titik
     setZoomTargetRouteId(null);
@@ -569,6 +696,7 @@ export default function DistanceRoutingPage() {
   };
 
   const handleWaypointDragEnd = async (index: number, lat: number, lng: number) => {
+    pushHistorySnapshot();
     setIsCalculatingRoute(true);
     setWaypoints((prev) =>
       prev.map((p, idx) => (idx === index ? { ...p, lat, lng } : p))
@@ -581,6 +709,7 @@ export default function DistanceRoutingPage() {
   };
 
   const handleRemoveWaypoint = (index: number) => {
+    pushHistorySnapshot();
     setWaypoints((prev) => {
       const next = prev.filter((_, idx) => idx !== index);
       if (next.length < 2) setDraftRouteData(null);
@@ -590,6 +719,7 @@ export default function DistanceRoutingPage() {
   };
 
   const handleResetWaypoints = () => {
+    pushHistorySnapshot();
     setWaypoints([]);
     setDraftRouteData(null);
     setSelectedAlternativeId(null);
@@ -598,6 +728,7 @@ export default function DistanceRoutingPage() {
   };
 
   const handleMoveWaypoint = (index: number, direction: "up" | "down") => {
+    pushHistorySnapshot();
     setWaypoints((prev) => {
       const targetIndex = direction === "up" ? index - 1 : index + 1;
       if (targetIndex < 0 || targetIndex >= prev.length) return prev;
@@ -619,6 +750,7 @@ export default function DistanceRoutingPage() {
   // Buat Jalan Lain (Pisah Rute): Titik tidak akan dihubungkan ke titik sebelumnya
   const handleToggleDisconnectWaypoint = (index: number) => {
     if (index <= 0) return;
+    pushHistorySnapshot();
     setIsCalculatingRoute(true);
     setWaypoints((prev) =>
       prev.map((p, idx) => {
@@ -642,34 +774,85 @@ export default function DistanceRoutingPage() {
     );
   };
 
-  // Hubungkan Rute Terdekat (Cabang Huruf T): Hubungkan titik ke jalan terdekat yang sudah dirute
-  const handleConnectWaypointToNearest = (index: number) => {
-    if (index <= 0) return;
+  // Hubungkan Rute Terdekat (Cabang Huruf T / Sambung Otomatis): Hubungkan titik ke jalan terdekat yang sudah dirute
+  const handleConnectWaypointToNearest = (index: number, mode: "road" | "direct" = "road") => {
+    if (waypoints.length < 2 || index < 0 || index >= waypoints.length) return;
+    pushHistorySnapshot();
     setIsCalculatingRoute(true);
+    const targetType = mode === "direct" ? "direct_snap" : "nearest_branch";
+
     setWaypoints((prev) =>
       prev.map((p, idx) => {
         if (idx !== index) return p;
-        const willBranch = p.connectionType !== "nearest_branch";
+        const isCurrentlySame = p.connectionType === targetType;
         return {
           ...p,
-          connectionType: willBranch ? "nearest_branch" : "sequential",
+          connectionType: isCurrentlySame ? "sequential" : targetType,
           isDisconnected: false,
           branchTargetCoord: undefined,
         };
       })
     );
     const targetWp = waypoints[index];
-    const willBranch = targetWp?.connectionType !== "nearest_branch";
+    const isCurrentlySame = targetWp?.connectionType === targetType;
     showToast(
-      willBranch
-        ? `Titik ${index + 1} dihubungkan ke jalur terdekat`
-        : `Titik ${index + 1} dikembalikan ke rute berurutan`,
+      !isCurrentlySame
+        ? mode === "direct"
+          ? `Titik ${index + 1} dihubungkan langsung ke jalur terdekat (Snap Cepat)`
+          : `Titik ${index + 1} dihubungkan ke jalur terdekat (Ikuti Jalan)`
+        : `Titik ${index + 1} dikembalikan ke rute berurutan normal`,
       "success"
     );
   };
 
+  // Import Titik Perjalanan dari File (GeoJSON, GPX, KML)
+  const handleImportWaypoints = (
+    newWaypoints: WaypointItem[],
+    mode: "snap_roads" | "keep_original"
+  ) => {
+    pushHistorySnapshot();
+    setIsCalculatingRoute(true);
+    if (mode === "keep_original") {
+      setConnectionMode("smart_direct");
+    } else {
+      setConnectionMode("sequential");
+    }
+    setWaypoints(newWaypoints);
+    showToast(
+      `Berhasil mengimpor ${newWaypoints.length} titik perjalanan (${
+        mode === "snap_roads" ? "Sesuaikan dengan jalan" : "Sesuai file awal"
+      })`,
+      "success"
+    );
+  };
+
+  // Balikkan Semua Titik Rute (Start ⇄ Finish)
+  const handleReverseAllWaypoints = () => {
+    if (waypoints.length < 2) return;
+    pushHistorySnapshot();
+    setIsCalculatingRoute(true);
+    setWaypoints((prev) => [...prev].reverse());
+    showToast("Arah rute berhasil dibalikkan (Awal ⇄ Akhir)", "success");
+  };
+
+  // Hubungkan Semua Titik ke Cabang / Jalur Terdekat
+  const handleConnectAllToNearest = () => {
+    if (waypoints.length < 2) return;
+    pushHistorySnapshot();
+    setIsCalculatingRoute(true);
+    setWaypoints((prev) =>
+      prev.map((p, idx) =>
+        idx === 0
+          ? p
+          : { ...p, connectionType: "nearest_branch", isDisconnected: false }
+      )
+    );
+    showToast("Semua titik diarahkan untuk menyambung ke jalur terdekat", "success");
+  };
+
   // 4. Operasi Buka & Tutup Folder
   const handleOpenFolder = (folderName: string) => {
+    setPreviewFolder(null);
     setSelectedFolder(folderName);
     setTargetFolder(folderName);
     setFocusedFolder(folderName);
@@ -677,23 +860,25 @@ export default function DistanceRoutingPage() {
     setFolderSubTab("routes-list");
   };
 
+  // Lihat Peta: tampilkan semua rute milik folder di peta (gaya sesuai tiap rute), tanpa membuka folder
+  const handlePreviewFolderOnMap = (folderName: string) => {
+    if (previewFolder && previewFolder.toLowerCase() === folderName.toLowerCase()) {
+      setPreviewFolder(null);
+      return;
+    }
+    setPreviewFolder(folderName);
+    setFocusedRouteId(null);
+    setZoomTargetFolder({ name: folderName, timestamp: Date.now() });
+  };
+
   const handleBackToAllFolders = () => {
     setSelectedFolder(null);
+    setPreviewFolder(null);
     setFocusedFolder(null);
     setFocusedRouteId(null);
     setZoomTargetFolder(null);
     setZoomTargetRouteId(null);
     setFolderSubTab("routes-list");
-  };
-
-  const handleViewFolder = (folderName: string) => {
-    setSelectedFolder(folderName);
-    setTargetFolder(folderName);
-    setFocusedFolder(folderName);
-    setFocusedRouteId(null);
-    setFolderSubTab("routes-list");
-    setZoomTargetFolder({ name: folderName, timestamp: Date.now() });
-    showToast(`Melihat rute di folder "${folderName}"`, "success");
   };
 
   const handleFocusRoute = (routeId: number) => {
@@ -715,7 +900,7 @@ export default function DistanceRoutingPage() {
   };
 
   // Navigasi Kembali dari Mode Pemetaan / Edit: Otomatis Simpan & Kembali ke Daftar
-  const handleBackFromEdit = async () => {
+  const handleBackFromEdit = React.useCallback(async () => {
     try {
       localStorage.removeItem(ACTIVE_EDIT_SESSION_KEY);
     } catch {}
@@ -727,7 +912,64 @@ export default function DistanceRoutingPage() {
     setWaypoints([]);
     setDraftRouteData(null);
     setSelectedAlternativeId(null);
+    setUndoStack([]);
+    setRedoStack([]);
     setFolderSubTab("routes-list");
+  }, [activeRouteId, flushSave, fetchRoutesAndFolders]);
+
+  // Tangani Navigasi Tombol Samping Mouse (Button 3 = Kembali / Back, Button 4 = Maju / Forward)
+  React.useEffect(() => {
+    const handleMouseAuxNav = (e: MouseEvent) => {
+      // Button 3 = Tombol Kembali samping mouse
+      if (e.button === 3) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (folderSubTab === "add-route") {
+          // Dari edit rute -> kembali ke daftar rute di folder
+          handleBackFromEdit();
+        } else if (selectedFolder !== null) {
+          // Dari daftar rute di folder -> kembali ke daftar semua folder
+          setSelectedFolder(null);
+        } else {
+          // Dari daftar folder (root) -> kembali ke modul/halaman utama
+          router.push("/");
+        }
+      } else if (e.button === 4) {
+        // Button 4 = Tombol Maju samping mouse
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (selectedFolder === null && dbFolders.length > 0) {
+          setSelectedFolder(dbFolders[0]);
+        }
+      }
+    };
+
+    window.addEventListener("mouseup", handleMouseAuxNav);
+    window.addEventListener("auxclick", handleMouseAuxNav);
+    return () => {
+      window.removeEventListener("mouseup", handleMouseAuxNav);
+      window.removeEventListener("auxclick", handleMouseAuxNav);
+    };
+  }, [folderSubTab, selectedFolder, dbFolders, router, handleBackFromEdit]);
+
+  // Pindahkan Rute ke Folder Lain
+  const handleConfirmMoveRoute = async (routeId: number, targetFld: string) => {
+    const target = routes.find((r) => r.id === routeId);
+    if (!target) return;
+    const res = await updateKustomisasiRute(routeId, { ...target, folder_name: targetFld });
+    if (res.success) {
+      setRoutes((prev) =>
+        prev.map((r) => (r.id === routeId ? { ...r, folder_name: targetFld } : r))
+      );
+      if (targetFld !== "Tanpa Folder" && !dbFolders.includes(targetFld)) {
+        setDbFolders((prev) => [...prev, targetFld]);
+      }
+      showToast(`Rute "${target.name}" berhasil dipindahkan ke folder "${targetFld}"`, "success");
+    } else {
+      showToast("Gagal memindahkan rute ke folder", "error");
+    }
   };
 
   // 6. Operasi Folder (Buat, Ubah Nama, Hapus)
@@ -974,14 +1216,14 @@ export default function DistanceRoutingPage() {
       : DEFAULT_ROUTE_CONFIG.lineStyle;
     setCustomLineStyle(style);
 
-    const validMarkerStyles: MarkerStyle[] = ["numbers", "letters", "none", "icon"];
+    const validMarkerStyles: MarkerStyle[] = ["numbers", "letters", "none", "icon", "pin", "dot", "random"];
     setMarkerStyle(
       validMarkerStyles.includes(route.marker_style as MarkerStyle)
         ? (route.marker_style as MarkerStyle)
         : "numbers"
     );
 
-    const validConnectionModes: ConnectionMode[] = ["sequential", "nearest", "direct_line"];
+    const validConnectionModes: ConnectionMode[] = ["sequential", "nearest", "direct_line", "loop_closed", "smart_direct"];
     setConnectionMode(
       validConnectionModes.includes(route.connection_mode as ConnectionMode)
         ? (route.connection_mode as ConnectionMode)
@@ -1013,10 +1255,11 @@ export default function DistanceRoutingPage() {
     lastSavedFingerprintRef.current = "";
 
     // Inisialisasi draft rute langsung dari geojson tersimpan agar instan dan tidak kedip
-    if (route.geojson && Array.isArray(route.geojson.coordinates) && route.geojson.coordinates.length > 0) {
-      const coords = route.geojson.coordinates;
+    const routeGeojson = parseRouteGeoJSON(route.geojson);
+    if (routeGeojson && Array.isArray(routeGeojson.coordinates) && routeGeojson.coordinates.length > 0) {
+      const coords = routeGeojson.coordinates;
       const isMulti =
-        route.geojson.type === "MultiLineString" ||
+        routeGeojson.type === "MultiLineString" ||
         (Array.isArray(coords[0]) && Array.isArray((coords as unknown[][])[0][0]));
 
       const leafletPoints = isMulti
@@ -1086,6 +1329,17 @@ export default function DistanceRoutingPage() {
     return routes;
   }, [routes, selectedFolder, unassignedRoutes]);
 
+  const mapRoutes = React.useMemo(() => {
+    if (selectedFolder) return filteredRoutes;
+    if (previewFolder) {
+      if (previewFolder.trim().toLowerCase() === "tanpa folder") return unassignedRoutes;
+      return routes.filter(
+        (r) => (r.folder_name || "").trim().toLowerCase() === previewFolder.trim().toLowerCase()
+      );
+    }
+    return [];
+  }, [routes, selectedFolder, previewFolder, filteredRoutes, unassignedRoutes]);
+
   return (
     <div className="flex flex-col h-screen w-full overflow-hidden bg-background text-foreground font-sans antialiased selection:bg-primary/20 selection:text-primary">
       {/* Toast Notification */}
@@ -1124,7 +1378,8 @@ export default function DistanceRoutingPage() {
               routes={routes}
               unassignedRoutes={unassignedRoutes}
               onOpenFolder={handleOpenFolder}
-              onViewFolder={handleViewFolder}
+              onViewFolder={handlePreviewFolderOnMap}
+              previewFolder={previewFolder}
               onOpenNewFolderModal={() => setIsNewFolderModalOpen(true)}
               onOpenRenameFolderModal={(f) => {
                 setRenameTargetFolder(f);
@@ -1135,13 +1390,10 @@ export default function DistanceRoutingPage() {
           ) : selectedFolder !== "Tanpa Folder" && folderSubTab === "add-route" ? (
             <TambahRute
               selectedFolder={selectedFolder}
-              allFolderList={allFolderList}
               filteredRoutesCount={filteredRoutes.length}
               onGoBack={handleBackFromEdit}
               routeName={routeName}
               onRouteNameChange={setRouteName}
-              targetFolder={targetFolder}
-              onTargetFolderChange={setTargetFolder}
               customColor={customColor}
               onCustomColorChange={setCustomColor}
               customWeight={customWeight}
@@ -1153,6 +1405,12 @@ export default function DistanceRoutingPage() {
               onMarkerStyleChange={setMarkerStyle}
               connectionMode={connectionMode}
               onConnectionModeChange={handleConnectionModeChange}
+              canUndo={undoStack.length > 0}
+              canRedo={redoStack.length > 0}
+              undoCount={undoStack.length}
+              redoCount={redoStack.length}
+              onUndo={handleUndo}
+              onRedo={handleRedo}
               waypoints={waypoints}
               draftRouteData={draftRouteData}
               selectedAlternativeId={selectedAlternativeId}
@@ -1174,9 +1432,14 @@ export default function DistanceRoutingPage() {
               onConnectWaypointToNearest={handleConnectWaypointToNearest}
               hideWaypointsOnMap={hideWaypointsOnMap}
               onToggleHideWaypoints={setHideWaypointsOnMap}
+              isPositionLocked={isPositionLocked}
+              onTogglePositionLocked={setIsPositionLocked}
               onFocusWaypoint={handleFocusWaypoint}
               onZoomToRoute={handleZoomToActiveRoute}
               onUpdateWaypointName={handleUpdateWaypointName}
+              onImportWaypoints={handleImportWaypoints}
+              onReverseAllWaypoints={handleReverseAllWaypoints}
+              onConnectAllToNearest={handleConnectAllToNearest}
             />
           ) : (
             <DaftarRuteFolder
@@ -1201,6 +1464,10 @@ export default function DistanceRoutingPage() {
               onOpenNewRouteModal={handleOpenNewRouteModal}
               onOpenRenameRouteModal={handleOpenRenameRouteModal}
               onEditRouteOnMap={handleEditRouteOnMap}
+              onOpenMoveFolderModal={(r) => {
+                setMoveTargetRoute(r);
+                setIsMoveFolderModalOpen(true);
+              }}
             />
           )}
         </PanelSamping>
@@ -1208,7 +1475,7 @@ export default function DistanceRoutingPage() {
         <PetaRute
           isSidePanelOpen={isSidePanelOpen}
           onOpenSidePanel={() => setIsSidePanelOpen(true)}
-          routes={selectedFolder ? filteredRoutes : routes}
+          routes={mapRoutes}
           waypoints={waypoints}
           draftPathCoordinates={activeDraftLeafletPoints}
           alternativeRoutes={draftRouteData?.alternatives || []}
@@ -1236,6 +1503,7 @@ export default function DistanceRoutingPage() {
           onConnectWaypointToNearest={handleConnectWaypointToNearest}
           onUpdateWaypointName={handleUpdateWaypointName}
           hideWaypointsOnMap={hideWaypointsOnMap}
+          isPositionLocked={isPositionLocked}
           basemapId={activeBasemapId}
           focusedRouteId={focusedRouteId}
           focusedFolder={focusedFolder}
@@ -1303,6 +1571,18 @@ export default function DistanceRoutingPage() {
           setRenameRouteNewNameInput("");
         }}
         onSubmitRenameRoute={handleConfirmRenameRoute}
+      />
+
+      {/* Modal Pindah Folder */}
+      <ModalPindahFolder
+        isOpen={isMoveFolderModalOpen}
+        route={moveTargetRoute}
+        allFolderList={allFolderList}
+        onClose={() => {
+          setIsMoveFolderModalOpen(false);
+          setMoveTargetRoute(null);
+        }}
+        onConfirmMove={handleConfirmMoveRoute}
       />
     </div>
   );
