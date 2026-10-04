@@ -42,6 +42,7 @@ import { TambahRute } from "./komponen/tambah-rute";
 import { ModalFolder } from "./komponen/modal-folder";
 import { ModalRute } from "./komponen/modal-rute";
 import { ModalPindahFolder } from "./komponen/modal-pindah-folder";
+import { ModalEkspor } from "./komponen/modal-ekspor";
 import { PetaRute } from "./komponen/peta-rute";
 
 // Kunci penyimpanan sesi edit aktif rute di localStorage
@@ -142,6 +143,17 @@ export default function DistanceRoutingPage() {
   // State Modal Pindahkan Rute ke Folder
   const [isMoveFolderModalOpen, setIsMoveFolderModalOpen] = React.useState(false);
   const [moveTargetRoute, setMoveTargetRoute] = React.useState<TraversedRoadRecord | null>(null);
+
+  // State Modal Ekspor Berkas
+  const [exportModalState, setExportModalState] = React.useState<{
+    isOpen: boolean;
+    title: string;
+    routes: TraversedRoadRecord[];
+  }>({
+    isOpen: false,
+    title: "",
+    routes: [],
+  });
 
   // State Riwayat Undo & Redo (Rudo dan Endo Titik & Viewport)
   interface HistorySnapshot {
@@ -899,6 +911,46 @@ export default function DistanceRoutingPage() {
     showToast("Mengarahkan ke rute di peta", "success");
   };
 
+  // Handler Pencarian Lokasi Google Maps Style
+  const handleSelectLocationFromSearch = (lat: number, lng: number, name: string) => {
+    setZoomTargetPoint({ lat, lng, timestamp: Date.now() });
+    showToast(`Mengarahkan ke: ${name}`, "success");
+  };
+
+  const handleAddWaypointFromSearch = async (lat: number, lng: number, name: string) => {
+    pushHistorySnapshot();
+    setIsCalculatingRoute(true);
+    const newId = `wp-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+    const newWp: WaypointItem = { id: newId, name, lat, lng };
+    setWaypoints((prev) => [...prev, newWp]);
+    setZoomTargetPoint({ lat, lng, timestamp: Date.now() });
+    showToast(`Titik ditambahkan: ${name}`, "success");
+  };
+
+  // Handler Buka Modal Ekspor Folder & Rute
+  const handleOpenExportFolder = (folderName: string) => {
+    const targetRoutes = routes.filter(
+      (r) => (r.folder_name || "Tanpa Folder").toLowerCase() === folderName.toLowerCase()
+    );
+    if (targetRoutes.length === 0) {
+      showToast(`Folder "${folderName}" tidak memiliki rute untuk diekspor`, "error");
+      return;
+    }
+    setExportModalState({
+      isOpen: true,
+      title: `Folder: ${folderName}`,
+      routes: targetRoutes,
+    });
+  };
+
+  const handleOpenExportRoute = (route: TraversedRoadRecord) => {
+    setExportModalState({
+      isOpen: true,
+      title: `Rute: ${route.name}`,
+      routes: [route],
+    });
+  };
+
   // Navigasi Kembali dari Mode Pemetaan / Edit: Otomatis Simpan & Kembali ke Daftar
   const handleBackFromEdit = React.useCallback(async () => {
     try {
@@ -1380,6 +1432,7 @@ export default function DistanceRoutingPage() {
               onOpenFolder={handleOpenFolder}
               onViewFolder={handlePreviewFolderOnMap}
               previewFolder={previewFolder}
+              onExportFolder={handleOpenExportFolder}
               onOpenNewFolderModal={() => setIsNewFolderModalOpen(true)}
               onOpenRenameFolderModal={(f) => {
                 setRenameTargetFolder(f);
@@ -1392,6 +1445,8 @@ export default function DistanceRoutingPage() {
               selectedFolder={selectedFolder}
               filteredRoutesCount={filteredRoutes.length}
               onGoBack={handleBackFromEdit}
+              onSelectLocation={handleSelectLocationFromSearch}
+              onAddWaypointDirectly={handleAddWaypointFromSearch}
               routeName={routeName}
               onRouteNameChange={setRouteName}
               customColor={customColor}
@@ -1448,6 +1503,7 @@ export default function DistanceRoutingPage() {
               focusedRouteId={focusedRouteId}
               onBackToAllFolders={handleBackToAllFolders}
               onFocusRoute={handleFocusRoute}
+              onExportRoute={handleOpenExportRoute}
               onOpenEditRouteModal={(r) => {
                 setEditingRoute({ ...r });
                 setIsEditingRouteModalOpen(true);
@@ -1583,6 +1639,17 @@ export default function DistanceRoutingPage() {
           setMoveTargetRoute(null);
         }}
         onConfirmMove={handleConfirmMoveRoute}
+      />
+
+      {/* Modal Ekspor Berkas (PNG, JPEG, SVG, GeoJSON, GPX, KML, CSV, JSON) */}
+      <ModalEkspor
+        isOpen={exportModalState.isOpen}
+        title={exportModalState.title}
+        routes={exportModalState.routes}
+        onClose={() =>
+          setExportModalState((prev) => ({ ...prev, isOpen: false }))
+        }
+        onSuccessToast={(msg) => showToast(msg, "success")}
       />
     </div>
   );

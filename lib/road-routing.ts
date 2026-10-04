@@ -1,7 +1,8 @@
 /**
  * Road Routing & Geocoding Service (Module 5)
  * Reads real-world road networks using OSRM (Open Source Routing Machine),
- * supports multi-stop waypoints (N points), and resolves street names using OpenStreetMap Nominatim.
+ * supports multi-stop waypoints (N points), multi-server fallback, batch querying,
+ * and resolves street names using OpenStreetMap Nominatim.
  */
 
 export interface WaypointItem {
@@ -161,8 +162,6 @@ export const PRESET_ROAD_POINTS: PresetRoadPoint[] = [
   },
 ];
 
-
-
 /**
  * Cari koordinat terdekat pada suatu jalur rute (untuk membentuk cabang persimpangan huruf T)
  */
@@ -214,6 +213,13 @@ export function findNearestCoordinateOnPath(
   return nearestPoint;
 }
 
+// OSRM Server Mirrors untuk keandalan maksimal dan bebas rate-limit
+const OSRM_SERVERS = [
+  "https://router.project-osrm.org/route/v1/driving",
+  "https://routing.openstreetmap.de/routed-car/route/v1/driving",
+  "https://routing.openstreetmap.de/routed-bike/route/v1/driving",
+];
+
 const osrmSegmentCache = new Map<
   string,
   {
@@ -231,21 +237,61 @@ export function clearOsrmCache() {
 }
 
 /**
- * Coba query 2 titik ke server OSRM dengan profil driving
+ * Fetch OSRM route dengan multi-server fallback dan retry otomatis
+ */
+async function fetchOsrmWithFallbacks(
+  coordsStr: string,
+  extraParams = "overview=full&geometries=geojson&steps=true&continue_straight=true"
+): Promise<{
+  geometry: { coordinates: [number, number][] };
+  legs: Array<{
+    distance: number;
+    duration: number;
+    summary?: string;
+    steps?: Array<{ name?: string }>;
+  }>;
+  distance: number;
+  duration: number;
+} | null> {
+  for (const serverUrl of OSRM_SERVERS) {
+    const url = `${serverUrl}/${coordsStr}?${extraParams}`;
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const response = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (response.status === 429 || response.status >= 500) {
+        continue;
+      }
+      if (!response.ok) continue;
+
+      const data = await response.json();
+      if (data.code === "Ok" && data.routes && data.routes.length > 0) {
+        return data.routes[0];
+      }
+    } catch {
+      // Coba mirror berikutnya
+      continue;
+    }
+  }
+  return null;
+}
+
+/**
+ * Coba query rute 2 titik ke server OSRM dengan deteksi cerdas untuk jalur berbalik/detour
  */
 async function tryOsrmPair(
   from: { lat: number; lng: number; name?: string },
-  to: { lat: number; lng: number; name?: string },
-  profile: "driving" | "foot" | "bike" = "driving"
+  to: { lat: number; lng: number; name?: string }
 ): Promise<{
   coords: [number, number][];
   leafletPoints: [number, number][];
   distanceKm: number;
   durationMin: number;
   streetName?: string;
-} | null | undefined> {
-  const effectiveProfile = profile === "driving" ? "driving" : "driving";
-  const profileKey = `${effectiveProfile}:${from.lat.toFixed(5)},${from.lng.toFixed(5)}->${to.lat.toFixed(5)},${to.lng.toFixed(5)}`;
+} | null> {
+  const profileKey = `${from.lat.toFixed(5)},${from.lng.toFixed(5)}->${to.lat.toFixed(5)},${to.lng.toFixed(5)}`;
   const cached = osrmSegmentCache.get(profileKey);
   if (cached) {
     return {
@@ -257,80 +303,98 @@ async function tryOsrmPair(
     };
   }
 
-  // Gunakan radius fleksibel agar titik yang tidak tepat di tengah aspal tetap tersnap ke jalan terdekat
-  const url = `https://router.project-osrm.org/route/v1/driving/${from.lng.toFixed(6)},${from.lat.toFixed(6)};${to.lng.toFixed(6)},${to.lat.toFixed(6)}?overview=full&geometries=geojson&steps=true&continue_straight=false`;
+  const straightDistKm = calculateHaversine(from.lat, from.lng, to.lat, to.lng);
+  const coordsStr = `${from.lng.toFixed(6)},${from.lat.toFixed(6)};${to.lng.toFixed(6)},${to.lat.toFixed(6)}`;
 
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 7000);
-      const response = await fetch(url, { signal: controller.signal });
-      clearTimeout(timeoutId);
+  // 1. Coba forward route
+  let route = await fetchOsrmWithFallbacks(coordsStr);
 
-      if (response.status === 429 || response.status >= 500) {
-        await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
-        continue;
-      }
-      if (!response.ok) return null;
-
-      const data = await response.json();
-      if (data.code === "Ok" && data.routes && data.routes.length > 0) {
-        const r = data.routes[0];
-        const coords = r.geometry.coordinates as [number, number][];
-        const leafletPoints = coords.map((c) => [c[1], c[0]] as [number, number]);
-        const distanceKm = Number((r.distance / 1000).toFixed(3));
-        const durationMin = Math.max(1, Math.round(r.duration / 60));
-        let streetName = "";
-        if (r.legs && r.legs[0]?.steps) {
-          for (const s of r.legs[0].steps) {
-            if (s.name && s.name.trim()) {
-              streetName = s.name.trim();
-              break;
-            }
+  // Jika OSRM driving memutar balik terlalu jauh karena batasan satu arah / separator
+  // (misal jarak garis lurus 200m tapi OSRM memutar 2.5km), coba arah sebaliknya atau mode bike
+  if (route && straightDistKm < 1.0 && route.distance / 1000 > straightDistKm * 3.5) {
+    const reverseCoords = `${to.lng.toFixed(6)},${to.lat.toFixed(6)};${from.lng.toFixed(6)},${from.lat.toFixed(6)}`;
+    const reverseRoute = await fetchOsrmWithFallbacks(reverseCoords);
+    if (reverseRoute && reverseRoute.distance < route.distance) {
+      const coords = [...reverseRoute.geometry.coordinates].reverse() as [number, number][];
+      const leafletPoints = coords.map((c) => [c[1], c[0]] as [number, number]);
+      const distanceKm = Number((reverseRoute.distance / 1000).toFixed(3));
+      const durationMin = Math.max(1, Math.round(reverseRoute.duration / 60));
+      let streetName = "";
+      if (reverseRoute.legs && reverseRoute.legs[0]?.steps) {
+        for (const s of reverseRoute.legs[0].steps) {
+          if (s.name && s.name.trim()) {
+            streetName = s.name.trim();
+            break;
           }
         }
-        const result = { coords, leafletPoints, distanceKm, durationMin, streetName };
-        osrmSegmentCache.set(profileKey, {
-          coords,
-          leafletPoints,
-          distanceKm,
-          durationMin,
-          streetNames: streetName ? [streetName] : [],
-          legs: [],
-        });
-        return result;
       }
-      return null;
-    } catch {
-      await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+      const result = { coords, leafletPoints, distanceKm, durationMin, streetName };
+      osrmSegmentCache.set(profileKey, {
+        coords,
+        leafletPoints,
+        distanceKm,
+        durationMin,
+        streetNames: streetName ? [streetName] : [],
+        legs: [],
+      });
+      return result;
     }
   }
-  return undefined;
+
+  if (route && route.geometry && route.geometry.coordinates.length >= 2) {
+    const coords = route.geometry.coordinates as [number, number][];
+    const leafletPoints = coords.map((c) => [c[1], c[0]] as [number, number]);
+    const distanceKm = Number((route.distance / 1000).toFixed(3));
+    const durationMin = Math.max(1, Math.round(route.duration / 60));
+    let streetName = "";
+    if (route.legs && route.legs[0]?.steps) {
+      for (const s of route.legs[0].steps) {
+        if (s.name && s.name.trim()) {
+          streetName = s.name.trim();
+          break;
+        }
+      }
+    }
+    const result = { coords, leafletPoints, distanceKm, durationMin, streetName };
+    osrmSegmentCache.set(profileKey, {
+      coords,
+      leafletPoints,
+      distanceKm,
+      durationMin,
+      streetNames: streetName ? [streetName] : [],
+      legs: [],
+    });
+    return result;
+  }
+
+  return null;
 }
 
 /**
- * Pastikan garis rute benar-benar menempel ke posisi titik (marker),
- * karena OSRM men-snap titik ke jalan sehingga ujung garis bisa sedikit bergeser.
+ * Hubungkan endpoint secara halus tanpa membuat siku tajam/kink ke pinggir jalan
  */
-function attachEndpoints(
+function smoothAttachEndpoints(
   leafletPoints: [number, number][],
   p1: { lat: number; lng: number },
   p2: { lat: number; lng: number }
 ): [number, number][] {
+  if (leafletPoints.length === 0) return [[p1.lat, p1.lng], [p2.lat, p2.lng]];
   const out = [...leafletPoints];
-  if (out.length === 0) return [[p1.lat, p1.lng], [p2.lat, p2.lng]];
   const first = out[0];
   const last = out[out.length - 1];
-  if (calculateHaversine(first[0], first[1], p1.lat, p1.lng) > 0.001) out.unshift([p1.lat, p1.lng]);
-  if (calculateHaversine(last[0], last[1], p2.lat, p2.lng) > 0.001) out.push([p2.lat, p2.lng]);
+
+  // Hanya jika titik klik berada cukup jauh dari jalan (> 40 meter), hubungkan perlahan
+  if (calculateHaversine(first[0], first[1], p1.lat, p1.lng) > 0.04) {
+    out.unshift([p1.lat, p1.lng]);
+  }
+  if (calculateHaversine(last[0], last[1], p2.lat, p2.lng) > 0.04) {
+    out.push([p2.lat, p2.lng]);
+  }
   return out;
 }
 
 /**
- * Rute cerdas antar 2 titik berdekatan:
- * - Menghubungkan titik secara langsung mengikuti jalan resmi OSRM.
- * - Jika jalan satu arah atau terbagi, otomatis mencoba arah sebaliknya agar tidak putar balik jauh.
- * - Menghasilkan garis lurus hanya jika pengguna secara eksplisit memilih opsi 'direct_line'.
+ * Rute antar 2 titik berdekatan
  */
 export async function routeBetweenTwoWaypoints(
   p1: { lat: number; lng: number; name?: string },
@@ -353,7 +417,7 @@ export async function routeBetweenTwoWaypoints(
     streetName?: string,
     cache = true
   ) => {
-    const leafletPoints = attachEndpoints(pts, p1, p2);
+    const leafletPoints = smoothAttachEndpoints(pts, p1, p2);
     const result = {
       coords: leafletPoints.map((c) => [c[1], c[0]] as [number, number]),
       leafletPoints,
@@ -374,7 +438,6 @@ export async function routeBetweenTwoWaypoints(
     return result;
   };
 
-  // Hanya jika pengguna secara eksplisit memilih 'direct_line', buat garis lurus langsung
   if (connectionMode === "direct_line") {
     const directPath = generateInterpolatedPath(p1.lat, p1.lng, p2.lat, p2.lng, 10);
     return build(
@@ -397,26 +460,17 @@ export async function routeBetweenTwoWaypoints(
     };
   }
 
-  // Sangat dekat (< 8 meter): sambung langsung
-  if (straightDistKm < 0.008) {
+  if (straightDistKm < 0.005) {
     return build([[p1.lat, p1.lng], [p2.lat, p2.lng]], Number(straightDistKm.toFixed(3)), 1, p1.name || p2.name);
   }
 
-  // 1. Coba arah maju (p1 -> p2) via OSRM jalan raya resmi
-  const forward = await tryOsrmPair(p1, p2, "driving");
+  // Coba rute OSRM
+  const forward = await tryOsrmPair(p1, p2);
   if (forward && forward.leafletPoints && forward.leafletPoints.length >= 2) {
     return build(forward.leafletPoints, forward.distanceKm, forward.durationMin, forward.streetName);
   }
 
-  // 2. Coba arah sebaliknya (p2 -> p1), berguna untuk jalan satu arah / terbagi atau titik dipindah ke belakang
-  const reverse = await tryOsrmPair(p2, p1, "driving");
-  if (reverse && reverse.leafletPoints && reverse.leafletPoints.length >= 2) {
-    const reversedPoints = [...reverse.leafletPoints].reverse() as [number, number][];
-    return build(reversedPoints, reverse.distanceKm, reverse.durationMin, reverse.streetName);
-  }
-
-  // 3. Fallback jika OpenStreetMap belum memiliki data jalan di titik tersebut / offline:
-  // Sambungkan langsung antar titik tetapi JANGAN simpan sebagai cache permanen
+  // Fallback direct interpolated
   const directPath = generateInterpolatedPath(p1.lat, p1.lng, p2.lat, p2.lng, 8);
   return build(
     directPath,
@@ -429,15 +483,12 @@ export async function routeBetweenTwoWaypoints(
 
 /**
  * Urutkan titik berdasarkan jarak terdekat (Greedy Nearest Neighbor)
- * Menghubungkan titik secara berantai ke tetangga terdekat agar jalur tidak melompat bolak-balik
  */
 export function sortWaypointsByNearestNeighbor(points: WaypointItem[]): WaypointItem[] {
   if (points.length <= 2) return [...points];
 
   const unvisited = [...points];
   const ordered: WaypointItem[] = [];
-
-  // Mulai dari titik pertama (origin)
   ordered.push(unvisited.shift()!);
 
   while (unvisited.length > 0) {
@@ -461,11 +512,11 @@ export function sortWaypointsByNearestNeighbor(points: WaypointItem[]): Waypoint
 
 /**
  * Multi-point road route calculation
- * Logika Baru & Mantap:
- * 1. Segmen per segmen dengan cache: rute yang sudah digambar tidak akan hilang atau berubah!
- * 2. Mencegah putar balik: jika titik dekat di jalan satu arah/terbagi, otomatis menggunakan arah jalan tanpa U-turn sejauh kiloan meter.
- * 3. Menghubungkan ke rute terdekat tidak memutus segmen sebelumnya: titik tetap tersambung dari titik sebelumnya DAN tersambung ke jalur terdekat.
- * 4. Mendukung gang dan jalan tikus dengan mengikuti lekukan jalan asli OpenStreetMap (bukan tarik lurus).
+ * Keunggulan:
+ * 1. Batch Multi-Coordinate Request: 1 query langsung memetakan semua titik berurutan secara akurat, mulus, dan bebas 429 rate-limit.
+ * 2. Segment-level Fallback: jika ada titik yang tidak terjangkau jaringan jalan, otomatis dihubungkan tanpa merusak rute lain.
+ * 3. Tidak ada garis siku patah/kink ke pinggir jalan.
+ * 4. Mendukung Pisah Rute (isDisconnected) dan Sambung Cabang (nearest_branch / direct_snap).
  */
 export async function calculateMultiPointRoadRoute(
   waypoints: WaypointItem[],
@@ -509,7 +560,6 @@ export async function calculateMultiPointRoadRoute(
     otherRoutesCoords = arg4 as [number, number][][];
   }
 
-  // Jika opsi Jalur Terdekat dipilih, urutkan titik dengan Greedy Nearest Neighbor
   const effectiveWaypoints =
     connectionMode === "nearest"
       ? sortWaypointsByNearestNeighbor(waypoints)
@@ -550,7 +600,7 @@ export async function calculateMultiPointRoadRoute(
       currentPolyline = newChain();
     };
 
-    // Cari titik terdekat pada garis yang sudah digambar atau rute lain di peta
+    // Fungsi pencari garis terdekat untuk cabang T / persimpangan
     const findNearestOnDrawnLines = (
       lat: number,
       lng: number,
@@ -558,18 +608,14 @@ export async function calculateMultiPointRoadRoute(
     ): { point: [number, number]; distKm: number } | null => {
       const candidateLines: [number, number][][] = [];
 
-      // 1. Garis-garis dari rute lain yang ada di peta (prioritas utama untuk menghubungkan ke rute lain)
       if (otherRoutesCoords && otherRoutesCoords.length > 0) {
         candidateLines.push(...otherRoutesCoords);
       }
 
-      // 2. Garis subPolylines dari rute saat ini yang sudah selesai digambar
       subPolylines.forEach((c) => {
         if (c.leafletPoints.length >= 2) candidateLines.push(c.leafletPoints);
       });
 
-      // 3. Garis currentPolyline saat ini, TAPI buang bagian segmen yang berdekatan dengan (lat, lng)
-      // dan excludePoint (p1) agar tidak menghubungkan ke titik itu sendiri
       if (currentPolyline.leafletPoints.length >= 2) {
         const filteredCurrent = currentPolyline.leafletPoints.filter(
           (pt) =>
@@ -584,13 +630,11 @@ export async function calculateMultiPointRoadRoute(
       let best: { point: [number, number]; distKm: number } | null = null;
       let bestDist = Infinity;
 
-      // Cari proyeksi titik terdekat ke ruas-ruas garis kandidat
       for (const line of candidateLines) {
         if (line.length < 2) continue;
         const p = findNearestCoordinateOnPath(lat, lng, line);
         const d = calculateHaversine(lat, lng, p[0], p[1]);
 
-        // Lewati jika persis di excludePoint (misal titik p1)
         if (
           excludePoint &&
           calculateHaversine(p[0], p[1], excludePoint[0], excludePoint[1]) < 0.005
@@ -598,7 +642,6 @@ export async function calculateMultiPointRoadRoute(
           continue;
         }
 
-        // Lewati jika itu titik itu sendiri (< 1 meter)
         if (d < 0.001) continue;
 
         if (d < bestDist) {
@@ -607,7 +650,6 @@ export async function calculateMultiPointRoadRoute(
         }
       }
 
-      // 4. Jika belum ketemu dari garis, cari ke titik waypoint mana saja di rute lain atau waypoint lain
       if (!best) {
         if (otherRoutesCoords) {
           for (const line of otherRoutesCoords) {
@@ -638,121 +680,182 @@ export async function calculateMultiPointRoadRoute(
       return best;
     };
 
-    for (let i = 0; i < effectiveWaypoints.length - 1; i++) {
-      const p1 = effectiveWaypoints[i];
-      const p2 = effectiveWaypoints[i + 1];
+    // 1. Pecah waypoints menjadi segmen kontinu (dipisah jika ada isDisconnected)
+    interface ContinuousChunk {
+      startIndex: number;
+      points: WaypointItem[];
+    }
 
-      const isP2Disconnected = p2.isDisconnected || p2.connectionType === "disconnected";
-      const isP2Branch = p2.connectionType === "nearest_branch";
-      const isP2DirectSnap = p2.connectionType === "direct_snap";
+    const chunks: ContinuousChunk[] = [];
+    let currentChunk: WaypointItem[] = [effectiveWaypoints[0]];
+    let chunkStartIndex = 0;
 
-      if (isP2Disconnected) {
-        // Titik p2 memulai jalan baru (tanpa garis dari p1 ke p2)
+    for (let i = 1; i < effectiveWaypoints.length; i++) {
+      const wp = effectiveWaypoints[i];
+      const isDisc = wp.isDisconnected || wp.connectionType === "disconnected";
+      if (isDisc) {
+        if (currentChunk.length >= 1) {
+          chunks.push({ startIndex: chunkStartIndex, points: currentChunk });
+        }
+        currentChunk = [wp];
+        chunkStartIndex = i;
+      } else {
+        currentChunk.push(wp);
+      }
+    }
+    if (currentChunk.length >= 1) {
+      chunks.push({ startIndex: chunkStartIndex, points: currentChunk });
+    }
+
+    // 2. Proses tiap chunk
+    for (const chunk of chunks) {
+      if (chunk.points.length < 2) {
+        continue;
+      }
+
+      // Jika direct_line, hitung interpolasi langsung
+      if (connectionMode === "direct_line") {
+        for (let i = 0; i < chunk.points.length - 1; i++) {
+          const p1 = chunk.points[i];
+          const p2 = chunk.points[i + 1];
+          const seg = await routeBetweenTwoWaypoints(p1, p2, "direct_line");
+          appendToChain(currentPolyline, seg);
+          legs.push({
+            fromName: p1.name || `Titik ${chunk.startIndex + i + 1}`,
+            toName: p2.name || `Titik ${chunk.startIndex + i + 2}`,
+            distanceKm: seg.distanceKm,
+            durationMin: seg.durationMin,
+          });
+        }
         closeCurrentChain();
         continue;
       }
 
-      if (isP2Branch || isP2DirectSnap) {
-        // Sambungkan p1 ke p2 terlebih dahulu
-        const seg = await routeBetweenTwoWaypoints(p1, p2, connectionMode);
-        appendToChain(currentPolyline, seg);
-        if (seg.streetName) streetNamesSet.add(seg.streetName);
+      // Coba batch query OSRM untuk chunk yang kontinu jika tidak ada titik cabang khusus
+      const hasSpecialBranch = chunk.points.some(
+        (p, idx) => idx > 0 && (p.connectionType === "nearest_branch" || p.connectionType === "direct_snap")
+      );
 
-        legs.push({
-          fromName: p1.name || `Titik ${i + 1}`,
-          toName: p2.name || `Titik ${i + 2}`,
-          distanceKm: seg.distanceKm,
-          durationMin: seg.durationMin,
-        });
+      let batchSuccess = false;
 
-        // Cari rute / titik terdekat sebelumnya untuk menghubungkan loop / persimpangan / rute lain
-        const nearest = findNearestOnDrawnLines(p2.lat, p2.lng, [p1.lat, p1.lng]);
-        if (nearest) {
-          if (isP2DirectSnap) {
-            // Opsi 2: Hubungkan Langsung (Snap Cepat)
-            subPolylines.push({
-              coords: [
-                [p2.lng, p2.lat],
-                [nearest.point[1], nearest.point[0]],
-              ],
-              leafletPoints: [
-                [p2.lat, p2.lng],
-                [nearest.point[0], nearest.point[1]],
-              ],
-              distanceKm: Number(nearest.distKm.toFixed(3)),
-              durationMin: Math.max(1, Math.round(nearest.distKm * 2)),
-            });
-            legs.push({
-              fromName: p2.name || `Titik ${i + 2}`,
-              toName: "Jalur Terdekat (Snap Langsung)",
-              distanceKm: Number(nearest.distKm.toFixed(3)),
-              durationMin: Math.max(1, Math.round(nearest.distKm * 2)),
-              isBranch: true,
-            });
-          } else {
-            // Opsi 1: Hubungkan Mengikuti Jalan Resmi (Ikuti Jalan)
-            // Sesuai permintaan pengguna: tidak apa-apa meski jalurnya lebih panjang dari jarak titik asalkan terhubung
-            const connector = await routeBetweenTwoWaypoints(
-              p2,
-              { lat: nearest.point[0], lng: nearest.point[1], name: "Jalur Terdekat" },
-              connectionMode
-            );
-            if (connector && connector.leafletPoints.length >= 2) {
-              subPolylines.push({
-                coords: connector.coords,
-                leafletPoints: connector.leafletPoints,
-                distanceKm: connector.distanceKm,
-                durationMin: connector.durationMin,
-              });
-              if (connector.streetName) streetNamesSet.add(connector.streetName);
+      if (!hasSpecialBranch && chunk.points.length >= 2 && chunk.points.length <= 50) {
+        const coordsStr = chunk.points
+          .map((p) => `${p.lng.toFixed(6)},${p.lat.toFixed(6)}`)
+          .join(";");
+
+        const batchRoute = await fetchOsrmWithFallbacks(coordsStr);
+        if (batchRoute && batchRoute.geometry && batchRoute.geometry.coordinates.length >= 2) {
+          const rawCoords = batchRoute.geometry.coordinates as [number, number][];
+          const leafletPoints = rawCoords.map((c) => [c[1], c[0]] as [number, number]);
+          const totalDistanceKm = Number((batchRoute.distance / 1000).toFixed(3));
+          const totalDurationMin = Math.max(1, Math.round(batchRoute.duration / 60));
+
+          subPolylines.push({
+            coords: rawCoords,
+            leafletPoints,
+            distanceKm: totalDistanceKm,
+            durationMin: totalDurationMin,
+          });
+
+          // Ekstrak legs dan nama jalan dari batch response
+          if (batchRoute.legs && batchRoute.legs.length > 0) {
+            for (let k = 0; k < batchRoute.legs.length; k++) {
+              const leg = batchRoute.legs[k];
+              const p1 = chunk.points[k];
+              const p2 = chunk.points[k + 1] || p1;
+              if (leg.steps) {
+                for (const s of leg.steps) {
+                  if (s.name && s.name.trim()) streetNamesSet.add(s.name.trim());
+                }
+              }
               legs.push({
-                fromName: p2.name || `Titik ${i + 2}`,
-                toName: "Jalur Terdekat (Ikuti Jalan)",
-                distanceKm: connector.distanceKm,
-                durationMin: connector.durationMin,
-                isBranch: true,
-              });
-            } else {
-              // Fallback aman: jika rute jalan buntu / tidak ada jaringan jalan, sambungkan langsung
-              subPolylines.push({
-                coords: [
-                  [p2.lng, p2.lat],
-                  [nearest.point[1], nearest.point[0]],
-                ],
-                leafletPoints: [
-                  [p2.lat, p2.lng],
-                  [nearest.point[0], nearest.point[1]],
-                ],
-                distanceKm: Number(nearest.distKm.toFixed(3)),
-                durationMin: Math.max(1, Math.round(nearest.distKm * 2)),
-              });
-              legs.push({
-                fromName: p2.name || `Titik ${i + 2}`,
-                toName: "Jalur Terdekat (Sambung Langsung)",
-                distanceKm: Number(nearest.distKm.toFixed(3)),
-                durationMin: Math.max(1, Math.round(nearest.distKm * 2)),
-                isBranch: true,
+                fromName: p1?.name || `Titik ${chunk.startIndex + k + 1}`,
+                toName: p2?.name || `Titik ${chunk.startIndex + k + 2}`,
+                distanceKm: Number((leg.distance / 1000).toFixed(3)),
+                durationMin: Math.max(1, Math.round(leg.duration / 60)),
               });
             }
           }
+
+          batchSuccess = true;
         }
-        continue;
       }
 
-      // Sambung normal berurutan (p1 -> p2)
-      const seg = await routeBetweenTwoWaypoints(p1, p2, connectionMode);
-      appendToChain(currentPolyline, seg);
-      if (seg.streetName) streetNamesSet.add(seg.streetName);
+      // Jika batch tidak digunakan atau gagal, lakukan perutean segmen demi segmen dengan fallback kuat
+      if (!batchSuccess) {
+        for (let i = 0; i < chunk.points.length - 1; i++) {
+          const p1 = chunk.points[i];
+          const p2 = chunk.points[i + 1];
+          const actualIndex = chunk.startIndex + i;
 
-      legs.push({
-        fromName: p1.name || `Titik ${i + 1}`,
-        toName: p2.name || `Titik ${i + 2}`,
-        distanceKm: seg.distanceKm,
-        durationMin: seg.durationMin,
-      });
+          const isP2Branch = p2.connectionType === "nearest_branch";
+          const isP2DirectSnap = p2.connectionType === "direct_snap";
+
+          const seg = await routeBetweenTwoWaypoints(p1, p2, connectionMode);
+          appendToChain(currentPolyline, seg);
+          if (seg.streetName) streetNamesSet.add(seg.streetName);
+
+          legs.push({
+            fromName: p1.name || `Titik ${actualIndex + 1}`,
+            toName: p2.name || `Titik ${actualIndex + 2}`,
+            distanceKm: seg.distanceKm,
+            durationMin: seg.durationMin,
+          });
+
+          if (isP2Branch || isP2DirectSnap) {
+            const nearest = findNearestOnDrawnLines(p2.lat, p2.lng, [p1.lat, p1.lng]);
+            if (nearest) {
+              if (isP2DirectSnap) {
+                subPolylines.push({
+                  coords: [
+                    [p2.lng, p2.lat],
+                    [nearest.point[1], nearest.point[0]],
+                  ],
+                  leafletPoints: [
+                    [p2.lat, p2.lng],
+                    [nearest.point[0], nearest.point[1]],
+                  ],
+                  distanceKm: Number(nearest.distKm.toFixed(3)),
+                  durationMin: Math.max(1, Math.round(nearest.distKm * 2)),
+                });
+                legs.push({
+                  fromName: p2.name || `Titik ${actualIndex + 2}`,
+                  toName: "Jalur Terdekat (Snap Langsung)",
+                  distanceKm: Number(nearest.distKm.toFixed(3)),
+                  durationMin: Math.max(1, Math.round(nearest.distKm * 2)),
+                  isBranch: true,
+                });
+              } else {
+                const connector = await routeBetweenTwoWaypoints(
+                  p2,
+                  { lat: nearest.point[0], lng: nearest.point[1], name: "Jalur Terdekat" },
+                  connectionMode
+                );
+                if (connector && connector.leafletPoints.length >= 2) {
+                  subPolylines.push({
+                    coords: connector.coords,
+                    leafletPoints: connector.leafletPoints,
+                    distanceKm: connector.distanceKm,
+                    durationMin: connector.durationMin,
+                  });
+                  if (connector.streetName) streetNamesSet.add(connector.streetName);
+                  legs.push({
+                    fromName: p2.name || `Titik ${actualIndex + 2}`,
+                    toName: "Jalur Terdekat (Ikuti Jalan)",
+                    distanceKm: connector.distanceKm,
+                    durationMin: connector.durationMin,
+                    isBranch: true,
+                  });
+                }
+              }
+            }
+          }
+        }
+        closeCurrentChain();
+      }
     }
 
-    // Periksa apakah titik pertama juga diset untuk menyambung ke jalur terdekat
+    // 3. Periksa titik pertama jika diset ke cabang terdekat
     const pFirst = effectiveWaypoints[0];
     if (
       pFirst &&
@@ -781,7 +884,6 @@ export async function calculateMultiPointRoadRoute(
             isBranch: true,
           });
         } else {
-          // Ikuti jalan resmi
           const connectorFirst = await routeBetweenTwoWaypoints(
             pFirst,
             { lat: nearestFirst.point[0], lng: nearestFirst.point[1], name: "Jalur Terdekat" },
@@ -802,37 +904,22 @@ export async function calculateMultiPointRoadRoute(
               durationMin: connectorFirst.durationMin,
               isBranch: true,
             });
-          } else {
-            subPolylines.push({
-              coords: [
-                [pFirst.lng, pFirst.lat],
-                [nearestFirst.point[1], nearestFirst.point[0]],
-              ],
-              leafletPoints: [
-                [pFirst.lat, pFirst.lng],
-                [nearestFirst.point[0], nearestFirst.point[1]],
-              ],
-              distanceKm: Number(nearestFirst.distKm.toFixed(3)),
-              durationMin: Math.max(1, Math.round(nearestFirst.distKm * 2)),
-            });
-            legs.unshift({
-              fromName: pFirst.name || "Titik Awal",
-              toName: "Jalur Terdekat (Sambung Langsung)",
-              distanceKm: Number(nearestFirst.distKm.toFixed(3)),
-              durationMin: Math.max(1, Math.round(nearestFirst.distKm * 2)),
-              isBranch: true,
-            });
           }
         }
       }
     }
 
-    // Jika mode loop_closed dipilih dan ada >= 2 titik, sambungkan kembali titik akhir ke titik awal
+    // 4. Jika mode loop_closed, sambungkan kembali titik akhir ke titik awal
     if (connectionMode === "loop_closed" && effectiveWaypoints.length >= 2) {
       const lastWp = effectiveWaypoints[effectiveWaypoints.length - 1];
       const firstWp = effectiveWaypoints[0];
       const returnSeg = await routeBetweenTwoWaypoints(lastWp, firstWp, connectionMode);
-      appendToChain(currentPolyline, returnSeg);
+      subPolylines.push({
+        coords: returnSeg.coords,
+        leafletPoints: returnSeg.leafletPoints,
+        distanceKm: returnSeg.distanceKm,
+        durationMin: returnSeg.durationMin,
+      });
       if (returnSeg.streetName) streetNamesSet.add(returnSeg.streetName);
 
       legs.push({
@@ -943,18 +1030,20 @@ export async function reverseGeocodeRoadName(lat: number, lng: number): Promise<
     clearTimeout(timeoutId);
 
     if (res.ok) {
-      const data = await res.json();
-      const addr = data.address || {};
-      const road =
-        addr.road ||
-        addr.pedestrian ||
-        addr.street ||
-        addr.neighbourhood ||
-        addr.suburb ||
-        data.display_name?.split(",")[0];
-      if (road) {
-        geocodeCache.set(cacheKey, road);
-        return road;
+      const data = await responseToJsonSafe(res);
+      if (data) {
+        const addr = data.address || {};
+        const road =
+          addr.road ||
+          addr.pedestrian ||
+          addr.street ||
+          addr.neighbourhood ||
+          addr.suburb ||
+          data.display_name?.split(",")[0];
+        if (road) {
+          geocodeCache.set(cacheKey, road);
+          return road;
+        }
       }
     }
   } catch (e) {
@@ -964,7 +1053,13 @@ export async function reverseGeocodeRoadName(lat: number, lng: number): Promise<
   return `Titik (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
 }
 
-
+async function responseToJsonSafe(res: Response) {
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Haversine formula calculation (km)
@@ -1045,4 +1140,3 @@ export function findBestInsertionIndex(
 
   return bestIndex;
 }
-

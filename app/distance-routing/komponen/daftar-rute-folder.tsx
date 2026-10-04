@@ -8,6 +8,7 @@ import {
   MoreVertical,
   Eye,
   Folder,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,6 +34,7 @@ interface DaftarRuteFolderProps {
   onOpenRenameRouteModal?: (route: TraversedRoadRecord) => void;
   onEditRouteOnMap?: (route: TraversedRoadRecord) => void;
   onOpenMoveFolderModal?: (route: TraversedRoadRecord) => void;
+  onExportRoute?: (route: TraversedRoadRecord) => void;
 }
 
 export function DaftarRuteFolder({
@@ -47,6 +49,7 @@ export function DaftarRuteFolder({
   onOpenRenameRouteModal,
   onEditRouteOnMap,
   onOpenMoveFolderModal,
+  onExportRoute,
 }: DaftarRuteFolderProps) {
   const isTanpaFolder = selectedFolder === "Tanpa Folder";
 
@@ -169,6 +172,14 @@ export function DaftarRuteFolder({
                           <span>Pindahkan ke Folder</span>
                         </DropdownMenuItem>
                       )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => onExportRoute?.(r)}
+                        className="cursor-pointer flex items-center gap-2"
+                      >
+                        <Download className="w-3.5 h-3.5 text-primary" />
+                        <span>Ekspor Rute...</span>
+                      </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         onClick={() => {

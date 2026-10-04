@@ -1,5 +1,4 @@
-import * as React from "react";
-import { Folder, FolderPlus, FolderArchive, MoreVertical, Edit3, Trash2, ChevronRight, Eye, EyeOff } from "lucide-react";
+import { Folder, FolderPlus, FolderArchive, MoreVertical, Edit3, Trash2, ChevronRight, Eye, EyeOff, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -20,6 +19,7 @@ interface DaftarFolderProps {
   onOpenDeleteFolderModal: (folderName: string) => void;
   onViewFolder?: (folderName: string) => void;
   previewFolder?: string | null;
+  onExportFolder?: (folderName: string) => void;
 }
 
 export function DaftarFolder({
@@ -32,6 +32,7 @@ export function DaftarFolder({
   onOpenDeleteFolderModal,
   onViewFolder,
   previewFolder,
+  onExportFolder,
 }: DaftarFolderProps) {
   const isPreviewing = (name: string) =>
     !!previewFolder && previewFolder.toLowerCase() === name.toLowerCase();
@@ -121,6 +122,14 @@ export function DaftarFolder({
                       >
                         <Edit3 className="w-3.5 h-3.5 text-primary" />
                         <span>Edit Nama</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => onExportFolder?.(folderName)}
+                        className="cursor-pointer flex items-center gap-2"
+                      >
+                        <Download className="w-3.5 h-3.5 text-primary" />
+                        <span>Ekspor Folder...</span>
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem

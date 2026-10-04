@@ -31,11 +31,14 @@ import { DaftarTitik } from "./daftar-titik";
 import { ImportPerjalanan } from "./import-perjalanan";
 import { ToolbarRiwayat } from "./toolbar-riwayat";
 import { AiFloatingAssistant } from "./ai-floating-assistant";
+import { PencarianLokasi } from "./pencarian-lokasi";
 
 interface TambahRuteProps {
   selectedFolder: string;
   filteredRoutesCount?: number;
   onGoBack: () => void;
+  onSelectLocation?: (lat: number, lng: number, name: string) => void;
+  onAddWaypointDirectly?: (lat: number, lng: number, name: string) => void;
 
   // Form Kustomisasi Garis & Titik
   routeName: string;
@@ -118,6 +121,8 @@ export function TambahRute({
   onToggleHideWaypoints,
   isPositionLocked = true,
   onTogglePositionLocked,
+  onSelectLocation,
+  onAddWaypointDirectly,
   onFocusWaypoint,
   onZoomToRoute,
   onUpdateWaypointName,
@@ -297,6 +302,15 @@ export function TambahRute({
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>Kembali ke Daftar Rute</span>
         </button>
+      </div>
+
+      {/* Pencarian Lokasi Google Maps Style di Atas Kustomisasi */}
+      <div className="rounded-xl border border-border bg-card p-3 shadow-2xs">
+        <PencarianLokasi
+          onSelectLocation={onSelectLocation}
+          onAddWaypointDirectly={onAddWaypointDirectly}
+          isAddMode={true}
+        />
       </div>
 
       {/* Accordion Pengaturan */}
