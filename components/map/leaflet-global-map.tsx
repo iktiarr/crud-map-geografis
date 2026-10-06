@@ -4,21 +4,37 @@ import * as React from "react";
 import type * as LType from "leaflet";
 import { BASEMAP_OPTIONS } from "./basemap-config";
 
+export interface TargetLocation {
+  lat: number;
+  lng: number;
+  zoom?: number;
+  title?: string;
+  subtitle?: string;
+}
+
 export interface LeafletGlobalMapProps {
   activeBasemapId: string;
+  targetLocation?: TargetLocation | null;
+  userLocation?: { lat: number; lng: number } | null;
   onMapCenterChange?: (coords: { lat: number; lng: number; zoom: number }) => void;
+  onCursorMove?: (coords: { lat: number; lng: number } | null) => void;
   className?: string;
 }
 
 export function LeafletGlobalMap({
   activeBasemapId,
+  targetLocation,
+  userLocation,
   onMapCenterChange,
+  onCursorMove,
   className = "w-full h-full",
 }: LeafletGlobalMapProps) {
   const mapContainerRef = React.useRef<HTMLDivElement>(null);
   const mapInstanceRef = React.useRef<LType.Map | null>(null);
   const currentLayerRef = React.useRef<LType.TileLayer | null>(null);
   const layerCacheRef = React.useRef<Map<string, LType.TileLayer>>(new Map());
+  const searchMarkerRef = React.useRef<LType.Marker | null>(null);
+  const userLocationMarkerRef = React.useRef<LType.LayerGroup | null>(null);
   const [L, setL] = React.useState<typeof LType | null>(null);
 
   React.useEffect(() => {
@@ -55,6 +71,9 @@ export function LeafletGlobalMap({
     []
   );
 
+  // Capture Initial Basemap ID once for map creation
+  const initialBasemapRef = React.useRef(activeBasemapId);
+
   React.useEffect(() => {
     if (!L || !mapContainerRef.current || mapInstanceRef.current) return;
 
@@ -76,10 +95,10 @@ export function LeafletGlobalMap({
       trackResize: true,
     });
 
-    L.control.zoom({ position: "topright" }).addTo(map);
+    L.control.zoom({ position: "bottomright" }).addTo(map);
     L.control.scale({ imperial: false, position: "bottomright" }).addTo(map);
 
-    const initialLayer = createTileLayer(L, activeBasemapId);
+    const initialLayer = createTileLayer(L, initialBasemapRef.current);
     initialLayer.addTo(map);
     currentLayerRef.current = initialLayer;
     mapInstanceRef.current = map;
@@ -88,14 +107,27 @@ export function LeafletGlobalMap({
       const center = map.getCenter();
       const zoom = map.getZoom();
       onMapCenterChange?.({
-        lat: Number(center.lat.toFixed(4)),
-        lng: Number(center.lng.toFixed(4)),
+        lat: Number(center.lat.toFixed(5)),
+        lng: Number(center.lng.toFixed(5)),
         zoom,
       });
     };
 
+    const handleMouseMove = (e: LType.LeafletMouseEvent) => {
+      onCursorMove?.({
+        lat: Number(e.latlng.lat.toFixed(5)),
+        lng: Number(e.latlng.lng.toFixed(5)),
+      });
+    };
+
+    const handleMouseOut = () => {
+      onCursorMove?.(null);
+    };
+
     map.on("moveend", handleMoveEnd);
     map.on("zoomend", handleMoveEnd);
+    map.on("mousemove", handleMouseMove);
+    map.on("mouseout", handleMouseOut);
 
     const resizeObserver = new ResizeObserver(() => {
       map.invalidateSize();
@@ -114,8 +146,9 @@ export function LeafletGlobalMap({
       mapInstanceRef.current = null;
       layerCache.clear();
     };
-  }, [L, createTileLayer, activeBasemapId, onMapCenterChange]);
+  }, [L, createTileLayer, onMapCenterChange, onCursorMove]);
 
+  // Update Basemap Layer Smoothly (Preserves current center, zoom, and location!)
   React.useEffect(() => {
     if (!L || !mapInstanceRef.current) return;
 
@@ -133,7 +166,7 @@ export function LeafletGlobalMap({
         if (map.hasLayer(oldLayer)) {
           map.removeLayer(oldLayer);
         }
-      }, 100);
+      }, 150);
 
       newLayer.once("load", () => {
         clearTimeout(removeTimer);
@@ -143,6 +176,81 @@ export function LeafletGlobalMap({
       });
     }
   }, [L, activeBasemapId, createTileLayer]);
+
+  // Handle Target Location (Search / FlyTo)
+  React.useEffect(() => {
+    if (!L || !mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
+
+    if (searchMarkerRef.current) {
+      map.removeLayer(searchMarkerRef.current);
+      searchMarkerRef.current = null;
+    }
+
+    if (targetLocation) {
+      const { lat, lng, zoom = 15 } = targetLocation;
+      map.flyTo([lat, lng], zoom, {
+        animate: true,
+        duration: 1.5,
+      });
+
+      const icon = L.divIcon({
+        className: "custom-search-pin",
+        html: `
+          <div style="position: relative; display: flex; align-items: center; justify-content: center;">
+            <div style="width: 28px; height: 28px; background-color: #ef4444; border: 3px solid #ffffff; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;">
+              <div style="width: 8px; height: 8px; background: white; border-radius: 50%;"></div>
+            </div>
+          </div>
+        `,
+        iconSize: [28, 28],
+        iconAnchor: [14, 28],
+        popupAnchor: [0, -28],
+      });
+
+      const marker = L.marker([lat, lng], { icon }).addTo(map);
+      searchMarkerRef.current = marker;
+    }
+  }, [L, targetLocation]);
+
+  // Handle User GPS Location
+  React.useEffect(() => {
+    if (!L || !mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
+
+    if (userLocationMarkerRef.current) {
+      map.removeLayer(userLocationMarkerRef.current);
+      userLocationMarkerRef.current = null;
+    }
+
+    if (userLocation) {
+      const { lat, lng } = userLocation;
+      const group = L.layerGroup();
+
+      const pulseIcon = L.divIcon({
+        className: "user-gps-pulse-marker",
+        html: `
+          <div style="position: relative; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">
+            <div style="position: absolute; width: 24px; height: 24px; border-radius: 50%; background: rgba(59, 130, 246, 0.35); animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
+            <div style="width: 14px; height: 14px; border-radius: 50%; background: #3b82f6; border: 2.5px solid #ffffff; box-shadow: 0 2px 6px rgba(0,0,0,0.3);"></div>
+          </div>
+        `,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
+      });
+
+      const userMarker = L.marker([lat, lng], { icon: pulseIcon }).bindPopup(
+        `<div style="font-weight: 600; font-size: 12px; color: #1e40af;">Lokasi Anda Saat Ini</div>
+         <div style="font-size: 11px; color: #64748b; font-family: monospace;">${lat.toFixed(5)}, ${lng.toFixed(5)}</div>`
+      );
+
+      group.addLayer(userMarker);
+      group.addTo(map);
+      userLocationMarkerRef.current = group;
+
+      map.flyTo([lat, lng], 16, { animate: true, duration: 1.2 });
+    }
+  }, [L, userLocation]);
 
   return (
     <div className={`relative bg-background ${className}`}>

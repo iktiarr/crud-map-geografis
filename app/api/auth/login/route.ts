@@ -19,7 +19,7 @@ export async function POST(req: Request) {
     const cleanIdentifier = identifier.trim().toLowerCase();
 
     const users = await sql`
-      SELECT id, name, username, email, password, phone, address, created_at
+      SELECT id, name, username, email, password, role, phone, address, created_at
       FROM users
       WHERE username = ${cleanIdentifier} OR email = ${cleanIdentifier}
       LIMIT 1;
@@ -47,6 +47,7 @@ export async function POST(req: Request) {
       name: user.name,
       username: user.username,
       email: user.email,
+      role: user.role || "user",
       phone: user.phone,
       address: user.address,
       createdAt: user.created_at,
@@ -63,6 +64,7 @@ export async function POST(req: Request) {
       name: safeUser.name,
       username: safeUser.username,
       email: safeUser.email,
+      role: safeUser.role,
     }), {
       httpOnly: false,
       secure: process.env.NODE_ENV === "production",

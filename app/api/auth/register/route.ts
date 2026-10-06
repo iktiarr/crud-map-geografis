@@ -16,8 +16,31 @@ export async function POST(req: Request) {
       );
     }
 
+    if (password.length < 8) {
+      return NextResponse.json(
+        { error: "Password minimal 8 karakter." },
+        { status: 400 }
+      );
+    }
+
     const cleanUsername = username.trim().toLowerCase();
     const cleanEmail = email.trim().toLowerCase();
+
+    const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!EMAIL_REGEX.test(cleanEmail)) {
+      return NextResponse.json(
+        { error: "Format email tidak valid." },
+        { status: 400 }
+      );
+    }
+
+    const USERNAME_REGEX = /^[a-zA-Z0-9_.-]{3,30}$/;
+    if (!USERNAME_REGEX.test(cleanUsername)) {
+      return NextResponse.json(
+        { error: "Username minimal 3 karakter." },
+        { status: 400 }
+      );
+    }
 
     const existingUsers = await sql`
       SELECT id, username, email FROM users
@@ -27,15 +50,23 @@ export async function POST(req: Request) {
 
     if (existingUsers.length > 0) {
       const existing = existingUsers[0];
-      if (existing.username === cleanUsername) {
+      if (existing.email === cleanEmail) {
         return NextResponse.json(
-          { error: "Username sudah digunakan oleh akun lain." },
+          { 
+            error: "Email sudah terdaftar.",
+            isEmailRegistered: true,
+            registeredEmail: cleanEmail
+          },
           { status: 409 }
         );
       }
-      if (existing.email === cleanEmail) {
+      if (existing.username === cleanUsername) {
         return NextResponse.json(
-          { error: "Email sudah terdaftar. Silakan gunakan email lain atau masuk." },
+          { 
+            error: "Username sudah digunakan.",
+            isUsernameRegistered: true,
+            registeredUsername: cleanUsername
+          },
           { status: 409 }
         );
       }

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { sql } from "@/lib/db";
+import { sql, withDbTimeout, getRandomAiConfigPool } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -8,11 +8,14 @@ export async function GET() {
   let dbError: string | null = null;
   let dbTablesCount = 0;
 
-  // 1. Cek Koneksi Database PostgreSQL / Neon
+  // 1. Cek Koneksi Database PostgreSQL / Neon dengan Timeout 3000ms
   try {
-    const result = await sql`
-      SELECT count(*) as count FROM information_schema.tables WHERE table_schema = 'public';
-    `;
+    const result = await withDbTimeout(
+      sql`
+        SELECT count(*) as count FROM information_schema.tables WHERE table_schema = 'public';
+      `,
+      3000
+    );
     dbConnected = true;
     dbTablesCount = Number(result[0]?.count || 0);
   } catch (err: unknown) {
@@ -20,23 +23,23 @@ export async function GET() {
     dbError = err instanceof Error ? err.message : "Tidak dapat terhubung ke server database";
   }
 
-  // 2. Cek Konfigurasi API Key AI
-  const openRouterKey = process.env.API_KEY_OPENROUTERAI || process.env.OPENROUTER_API_KEY || "";
-  const geminiKey = process.env.GEMINI_API_KEY || "";
-  const openaiKey = process.env.OPENAI_API_KEY || "";
+  // 2. Cek Konfigurasi API Key AI (Database pool & .env)
+  let hasAiKey = false;
+  try {
+    const aiPool = await getRandomAiConfigPool();
+    if (aiPool && aiPool.length > 0 && aiPool[0].apiKey && aiPool[0].apiKey.trim().length > 5) {
+      hasAiKey = true;
+    }
+  } catch {
+    hasAiKey = false;
+  }
 
-  const hasAiKey =
-    openRouterKey.trim().length > 10 ||
-    geminiKey.trim().length > 10 ||
-    openaiKey.trim().length > 10;
-
-  const aiProvider = openRouterKey
-    ? "OpenRouter AI (DeepSeek / Llama)"
-    : geminiKey
-    ? "Google Gemini AI"
-    : openaiKey
-    ? "OpenAI"
-    : "Belum Dikonfigurasi";
+  if (!hasAiKey) {
+    const openRouterKey = (process.env.API_KEY_OPENROUTERAI || process.env.OPENROUTER_API_KEY || "").trim();
+    const geminiKey = (process.env.GEMINI_API_KEY || "").trim();
+    const openaiKey = (process.env.OPENAI_API_KEY || "").trim();
+    hasAiKey = openRouterKey.length > 5 || geminiKey.length > 5 || openaiKey.length > 5;
+  }
 
   return NextResponse.json({
     timestamp: new Date().toISOString(),
@@ -48,7 +51,6 @@ export async function GET() {
     },
     ai: {
       configured: hasAiKey,
-      provider: aiProvider,
     },
   });
 }

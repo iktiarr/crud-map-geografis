@@ -307,7 +307,7 @@ async function tryOsrmPair(
   const coordsStr = `${from.lng.toFixed(6)},${from.lat.toFixed(6)};${to.lng.toFixed(6)},${to.lat.toFixed(6)}`;
 
   // 1. Coba forward route
-  let route = await fetchOsrmWithFallbacks(coordsStr);
+  const route = await fetchOsrmWithFallbacks(coordsStr);
 
   // Jika OSRM driving memutar balik terlalu jauh karena batasan satu arah / separator
   // (misal jarak garis lurus 200m tapi OSRM memutar 2.5km), coba arah sebaliknya atau mode bike

@@ -12,13 +12,17 @@ import {
   EyeOff, 
   AlertCircle, 
   CheckCircle2, 
-  Globe2, 
   ArrowRight,
   UserPlus,
-  X
+  Loader2,
+  Check,
+  AlertTriangle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/auth-context";
+
+const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+const USERNAME_REGEX = /^[a-zA-Z0-9_.-]{3,30}$/;
 
 export function AuthModal() {
   const { isAuthModalOpen, isAuthenticated } = useAuth();
@@ -57,6 +61,76 @@ function AuthModalDialog() {
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [successMsg, setSuccessMsg] = React.useState<string | null>(null);
+  const [existingEmailSuggestion, setExistingEmailSuggestion] = React.useState<string | null>(null);
+
+  // Live Check ketersediaan saat register
+  const [regUsernameStatus, setRegUsernameStatus] = React.useState<{ checking: boolean; available?: boolean; message?: string }>({ checking: false });
+  const [regEmailStatus, setRegEmailStatus] = React.useState<{ checking: boolean; available?: boolean; message?: string }>({ checking: false });
+
+  React.useEffect(() => {
+    if (activeTab !== "register") return;
+
+    const cleanU = regUsername.trim().toLowerCase();
+    const cleanE = regEmail.trim().toLowerCase();
+
+    if (!cleanU && !cleanE) {
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      let skipUserApi = false;
+      let skipEmailApi = false;
+
+      if (cleanU) {
+        if (cleanU.length < 3) {
+          setRegUsernameStatus({ checking: false, available: false, message: "Username minimal 3 karakter" });
+          skipUserApi = true;
+        } else if (!USERNAME_REGEX.test(cleanU)) {
+          setRegUsernameStatus({ checking: false, available: false, message: "Hanya huruf, angka, titik, dan garis bawah" });
+          skipUserApi = true;
+        } else {
+          setRegUsernameStatus((prev) => ({ ...prev, checking: true }));
+        }
+      } else {
+        setRegUsernameStatus({ checking: false });
+        skipUserApi = true;
+      }
+
+      if (cleanE) {
+        if (!EMAIL_REGEX.test(cleanE)) {
+          setRegEmailStatus({ checking: false, available: false, message: "Format email tidak valid" });
+          skipEmailApi = true;
+        } else {
+          setRegEmailStatus((prev) => ({ ...prev, checking: true }));
+        }
+      } else {
+        setRegEmailStatus({ checking: false });
+        skipEmailApi = true;
+      }
+
+      if (skipUserApi && skipEmailApi) return;
+
+      try {
+        const uParam = !skipUserApi && cleanU ? `username=${encodeURIComponent(cleanU)}` : "";
+        const eParam = !skipEmailApi && cleanE ? `email=${encodeURIComponent(cleanE)}` : "";
+        const query = [uParam, eParam].filter(Boolean).join("&");
+
+        if (!query) return;
+
+        const res = await fetch(`/api/auth/check-availability?${query}`);
+        const data = await res.json();
+        if (data.success) {
+          if (data.username && !skipUserApi) setRegUsernameStatus({ checking: false, ...data.username });
+          if (data.email && !skipEmailApi) setRegEmailStatus({ checking: false, ...data.email });
+        }
+      } catch {
+        if (!skipUserApi) setRegUsernameStatus((prev) => ({ ...prev, checking: false }));
+        if (!skipEmailApi) setRegEmailStatus((prev) => ({ ...prev, checking: false }));
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [regUsername, regEmail, activeTab]);
 
   // Handle ESC key to close
   React.useEffect(() => {
@@ -82,6 +156,7 @@ function AuthModalDialog() {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
+    setExistingEmailSuggestion(null);
 
     if (!loginIdentifier.trim() || !loginPassword) {
       setErrorMsg("Harap masukkan email/username dan password.");
@@ -104,14 +179,26 @@ function AuthModalDialog() {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
+    setExistingEmailSuggestion(null);
 
     if (!regName.trim() || !regUsername.trim() || !regEmail.trim() || !regPassword) {
-      setErrorMsg("Nama, username, email, dan password wajib diisi.");
+      setErrorMsg("Semua kolom wajib diisi.");
       return;
     }
 
-    if (regPassword.length < 6) {
-      setErrorMsg("Password minimal 6 karakter.");
+    if (regPassword.length < 8) {
+      setErrorMsg("Password minimal 8 karakter.");
+      return;
+    }
+
+    if (regUsernameStatus.available === false) {
+      setErrorMsg("Username sudah digunakan.");
+      return;
+    }
+
+    if (regEmailStatus.available === false) {
+      setErrorMsg("Email sudah terdaftar.");
+      setExistingEmailSuggestion(regEmail.trim());
       return;
     }
 
@@ -127,7 +214,11 @@ function AuthModalDialog() {
     setIsSubmitting(false);
 
     if (!result.success) {
-      setErrorMsg(result.error || "Pendaftaran gagal. Periksa kembali data Anda.");
+      const err = result.error || "Pendaftaran gagal. Periksa kembali data Anda.";
+      setErrorMsg(err);
+      if (err.toLowerCase().includes("email") && err.toLowerCase().includes("terdaftar")) {
+        setExistingEmailSuggestion(regEmail.trim());
+      }
     } else {
       setSuccessMsg("Akun berhasil dibuat dan otomatis masuk! Membuka akses...");
       handleSuccessfulAuth();
@@ -148,50 +239,14 @@ function AuthModalDialog() {
         role="dialog"
         aria-modal="true"
       >
-        {/* Close Button */}
-        <button
-          type="button"
-          onClick={closeAuthModal}
-          className="absolute right-4 top-4 p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary cursor-pointer"
-          title="Tutup dialog"
-          aria-label="Tutup"
-        >
-          <X className="w-4 h-4" />
-        </button>
-
         {/* Header */}
-        <div className="flex items-start gap-3 mb-6 pb-4 border-b border-border pr-6">
-          <div className="w-10 h-10 rounded-lg bg-secondary border border-border flex items-center justify-center text-foreground shrink-0 shadow-2xs">
-            {authModalOptions?.moduleTitle ? (
-              <Lock className="w-4.5 h-4.5" />
-            ) : (
-              <Globe2 className="w-4.5 h-4.5" />
-            )}
-          </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-bold text-lg tracking-tight text-foreground">Global Studio</span>
-              {authModalOptions?.moduleTitle ? (
-                <span className="text-xs font-mono px-2.5 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground font-medium flex items-center gap-1.5">
-                  <Lock className="w-3 h-3 text-muted-foreground" />
-                  Perlu Masuk
-                </span>
-              ) : (
-                <span className="text-xs font-mono px-2.5 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground font-medium">
-                  Autentikasi
-                </span>
-              )}
-            </div>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-              {authModalOptions?.moduleTitle ? (
-                <>
-                  Akses untuk modul <span className="font-semibold text-foreground">{authModalOptions.moduleTitle}</span> memerlukan akun. Silakan masuk atau daftar terlebih dahulu.
-                </>
-              ) : (
-                activeTab === "register" ? "Silakan buat akun untuk mengakses platform" : "Silakan masuk ke akun Anda"
-              )}
-            </p>
-          </div>
+        <div className="text-center mb-5 pb-4 border-b border-border space-y-1">
+          <h2 className="font-bold text-xl tracking-tight text-foreground">
+            {activeTab === "login" ? "Login" : "Register"}
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            {activeTab === "login" ? "Masuk ke akun Anda" : "Daftar akun baru"}
+          </p>
         </div>
 
         {/* Tab Switcher */}
@@ -209,7 +264,7 @@ function AuthModalDialog() {
             }`}
           >
             <Lock className="w-3.5 h-3.5" />
-            <span>Masuk</span>
+            <span>Login</span>
           </button>
           <button
             type="button"
@@ -224,14 +279,30 @@ function AuthModalDialog() {
             }`}
           >
             <UserPlus className="w-3.5 h-3.5" />
-            <span>Daftar Akun</span>
+            <span>Register</span>
           </button>
         </div>
 
         {errorMsg && (
-          <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-sm flex items-center gap-2.5 font-medium">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{errorMsg}</span>
+          <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-xs space-y-1.5 font-medium">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{errorMsg}</span>
+            </div>
+            {existingEmailSuggestion && (
+              <button
+                type="button"
+                onClick={() => {
+                  setLoginIdentifier(existingEmailSuggestion);
+                  setActiveTab("login");
+                  setErrorMsg(null);
+                  setExistingEmailSuggestion(null);
+                }}
+                className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline cursor-pointer pt-0.5"
+              >
+                <span>➔ Klik di sini untuk Masuk langsung dengan email {existingEmailSuggestion}</span>
+              </button>
+            )}
           </div>
         )}
 
@@ -245,8 +316,8 @@ function AuthModalDialog() {
         {activeTab === "login" ? (
           <form onSubmit={handleLoginSubmit} className="space-y-4 text-sm py-1">
             <div>
-              <label className="text-foreground block mb-1.5 font-medium text-xs sm:text-sm">
-                Email atau Username <span className="text-destructive">*</span>
+              <label className="text-foreground mb-1.5 font-medium flex items-center justify-between text-xs sm:text-sm">
+                <span>Email atau Username <span className="text-destructive">*</span></span>
               </label>
               <div className="relative">
                 <User className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -262,8 +333,8 @@ function AuthModalDialog() {
             </div>
 
             <div>
-              <label className="text-foreground block mb-1.5 font-medium text-xs sm:text-sm">
-                Password <span className="text-destructive">*</span>
+              <label className="text-foreground mb-1.5 font-medium flex items-center justify-between text-xs sm:text-sm">
+                <span>Password <span className="text-destructive">*</span></span>
               </label>
               <div className="relative">
                 <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -272,7 +343,7 @@ function AuthModalDialog() {
                   required
                   value={loginPassword}
                   onChange={(e) => setLoginPassword(e.target.value)}
-                  placeholder="Masukkan password Anda"
+                  placeholder="Kata sandi akun Anda"
                   className="w-full bg-background border border-border rounded-lg py-2.5 pl-10 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
                 />
                 <button
@@ -297,8 +368,8 @@ function AuthModalDialog() {
         ) : (
           <form onSubmit={handleRegisterSubmit} className="space-y-3.5 text-sm">
             <div>
-              <label className="text-foreground block mb-1.5 font-medium">
-                Nama Lengkap <span className="text-destructive">*</span>
+              <label className="text-foreground mb-1.5 font-medium flex items-center justify-between text-xs sm:text-sm">
+                <span>Nama Lengkap <span className="text-destructive">*</span></span>
               </label>
               <div className="relative">
                 <User className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -307,7 +378,7 @@ function AuthModalDialog() {
                   required
                   value={regName}
                   onChange={(e) => setRegName(e.target.value)}
-                  placeholder="Contoh: Budi Pratama"
+                  placeholder="Nama lengkap Anda"
                   className="w-full bg-background border border-border rounded-lg py-2.5 pl-10 pr-3.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
                 />
               </div>
@@ -315,22 +386,42 @@ function AuthModalDialog() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-foreground block mb-1.5 font-medium">
-                  Username <span className="text-destructive">*</span>
+                <label className="text-foreground mb-1.5 font-medium flex items-center justify-between text-xs sm:text-sm">
+                  <span>Username <span className="text-destructive">*</span></span>
                 </label>
-                <input
-                  type="text"
-                  required
-                  value={regUsername}
-                  onChange={(e) => setRegUsername(e.target.value.toLowerCase().replace(/\s+/g, ""))}
-                  placeholder="budipratama"
-                  className="w-full bg-background border border-border rounded-lg py-2.5 px-3.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors font-mono"
-                />
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-mono">@</span>
+                  <input
+                    type="text"
+                    required
+                    value={regUsername}
+                    onChange={(e) => setRegUsername(e.target.value.toLowerCase().replace(/\s+/g, ""))}
+                    placeholder="Username"
+                    className={`w-full bg-background border rounded-lg py-2.5 pl-8 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none transition-colors font-mono ${
+                      regUsernameStatus.available === false
+                        ? "border-destructive text-destructive focus:border-destructive"
+                        : regUsernameStatus.available
+                        ? "border-emerald-500 focus:border-emerald-500"
+                        : "border-border focus:border-primary"
+                    }`}
+                  />
+                </div>
+                {regUsernameStatus.checking ? (
+                  <div className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    <span>Cek username...</span>
+                  </div>
+                ) : regUsernameStatus.message ? (
+                  <div className={`text-[11px] mt-1 flex items-center gap-1 ${regUsernameStatus.available === false ? "text-destructive font-medium" : "text-emerald-600 dark:text-emerald-400 font-medium"}`}>
+                    {regUsernameStatus.available === false ? <AlertTriangle className="w-3 h-3 shrink-0" /> : <Check className="w-3 h-3 shrink-0" />}
+                    <span>{regUsernameStatus.message}</span>
+                  </div>
+                ) : null}
               </div>
 
               <div>
-                <label className="text-foreground block mb-1.5 font-medium">
-                  Email <span className="text-destructive">*</span>
+                <label className="text-foreground mb-1.5 font-medium flex items-center justify-between text-xs sm:text-sm">
+                  <span>Email <span className="text-destructive">*</span></span>
                 </label>
                 <div className="relative">
                   <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -339,16 +430,33 @@ function AuthModalDialog() {
                     required
                     value={regEmail}
                     onChange={(e) => setRegEmail(e.target.value)}
-                    placeholder="budi@example.com"
-                    className="w-full bg-background border border-border rounded-lg py-2.5 pl-10 pr-3.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
+                    placeholder="nama@email.com"
+                    className={`w-full bg-background border rounded-lg py-2.5 pl-10 pr-3.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none transition-colors ${
+                      regEmailStatus.available === false
+                        ? "border-destructive text-destructive focus:border-destructive"
+                        : regEmailStatus.available
+                        ? "border-emerald-500 focus:border-emerald-500"
+                        : "border-border focus:border-primary"
+                    }`}
                   />
                 </div>
+                {regEmailStatus.checking ? (
+                  <div className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    <span>Cek email...</span>
+                  </div>
+                ) : regEmailStatus.message ? (
+                  <div className={`text-[11px] mt-1 flex items-center gap-1 ${regEmailStatus.available === false ? "text-destructive font-medium" : "text-emerald-600 dark:text-emerald-400 font-medium"}`}>
+                    {regEmailStatus.available === false ? <AlertTriangle className="w-3 h-3 shrink-0" /> : <Check className="w-3 h-3 shrink-0" />}
+                    <span>{regEmailStatus.message}</span>
+                  </div>
+                ) : null}
               </div>
             </div>
 
             <div>
-              <label className="text-foreground block mb-1.5 font-medium">
-                Password <span className="text-destructive">*</span>
+              <label className="text-foreground mb-1.5 font-medium flex items-center justify-between text-xs sm:text-sm">
+                <span>Password <span className="text-destructive">*</span></span>
               </label>
               <div className="relative">
                 <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -357,8 +465,14 @@ function AuthModalDialog() {
                   required
                   value={regPassword}
                   onChange={(e) => setRegPassword(e.target.value)}
-                  placeholder="Minimal 6 karakter"
-                  className="w-full bg-background border border-border rounded-lg py-2.5 pl-10 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
+                  placeholder="Kata sandi baru (min. 8 karakter)"
+                  className={`w-full bg-background border rounded-lg py-2.5 pl-10 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none transition-colors ${
+                    regPassword.length > 0 && regPassword.length < 8
+                      ? "border-destructive text-destructive focus:border-destructive"
+                      : regPassword.length >= 8
+                      ? "border-emerald-500 focus:border-emerald-500"
+                      : "border-border focus:border-primary"
+                  }`}
                 />
                 <button
                   type="button"
@@ -368,31 +482,48 @@ function AuthModalDialog() {
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+              {regPassword.length > 0 && regPassword.length < 8 ? (
+                <div className="text-[11px] mt-1.5 flex items-center gap-1.5 text-destructive font-medium">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  <span>Password minimal 8 karakter</span>
+                </div>
+              ) : regPassword.length >= 8 ? (
+                <div className="text-[11px] mt-1.5 flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
+                  <Check className="w-3.5 h-3.5 shrink-0" />
+                  <span>Password memenuhi syarat</span>
+                </div>
+              ) : null}
             </div>
 
             <div>
-              <label className="text-foreground block mb-1.5 font-medium">Nomor HP / WhatsApp</label>
+              <label className="text-foreground mb-1.5 font-medium flex items-center justify-between text-xs sm:text-sm">
+                <span>Nomor HP / WhatsApp</span>
+                <span className="text-[11px] font-normal text-muted-foreground">Opsional</span>
+              </label>
               <div className="relative">
                 <Phone className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <input
                   type="tel"
                   value={regPhone}
                   onChange={(e) => setRegPhone(e.target.value)}
-                  placeholder="081234567890"
+                  placeholder="081234567890 (opsional)"
                   className="w-full bg-background border border-border rounded-lg py-2.5 pl-10 pr-3.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
                 />
               </div>
             </div>
 
             <div>
-              <label className="text-foreground block mb-1.5 font-medium">Alamat Domisili</label>
+              <label className="text-foreground mb-1.5 font-medium flex items-center justify-between text-xs sm:text-sm">
+                <span>Alamat Domisili</span>
+                <span className="text-[11px] font-normal text-muted-foreground">Opsional</span>
+              </label>
               <div className="relative">
                 <MapPin className="w-4 h-4 absolute left-3.5 top-3 text-muted-foreground" />
                 <textarea
                   rows={2}
                   value={regAddress}
                   onChange={(e) => setRegAddress(e.target.value)}
-                  placeholder="Kota / Alamat lengkap domisili"
+                  placeholder="Alamat domisili Anda (opsional)"
                   className="w-full bg-background border border-border rounded-lg py-2.5 pl-10 pr-3.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors resize-none"
                 />
               </div>

@@ -610,12 +610,12 @@ export default function DistanceRoutingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [waypointsCoordKey, connectionMode, otherRoutesCoordinates.length]);
 
-  // Fungsi Riwayat Perubahan (Undo & Redo)
+  // Fungsi Riwayat Perubahan (Undo & Redo) - Dioptimalkan untuk responsivitas instan tanpa delay
   const pushHistorySnapshot = React.useCallback(() => {
     setUndoStack((prev) => [
       ...prev.slice(-30),
       {
-        waypoints: JSON.parse(JSON.stringify(waypoints)),
+        waypoints: waypoints.map((w) => ({ ...w })),
         connectionMode,
         markerStyle,
         targetPoint: zoomTargetPoint ? { lat: zoomTargetPoint.lat, lng: zoomTargetPoint.lng } : null,
@@ -641,7 +641,7 @@ export default function DistanceRoutingPage() {
       setRedoStack([]);
     } else {
       const current: HistorySnapshot = {
-        waypoints: JSON.parse(JSON.stringify(waypoints)),
+        waypoints: waypoints.map((w) => ({ ...w })),
         connectionMode,
         markerStyle,
         targetPoint: null,

@@ -1,6 +1,7 @@
 export interface BasemapOption {
   id: string;
   name: string;
+  provider: "google" | "esri" | "osm";
   type: string;
   url: string;
   attribution: string;
@@ -15,6 +16,7 @@ export const BASEMAP_OPTIONS: BasemapOption[] = [
   {
     id: "google-hybrid",
     name: "Google Satelit Hybrid",
+    provider: "google",
     type: "Satelit + Label",
     url: "https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
     attribution: "&copy; Google Maps",
@@ -27,6 +29,7 @@ export const BASEMAP_OPTIONS: BasemapOption[] = [
   {
     id: "google-satellite",
     name: "Google Satelit Murni",
+    provider: "google",
     type: "Foto Satelit",
     url: "https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
     attribution: "&copy; Google Maps",
@@ -39,6 +42,7 @@ export const BASEMAP_OPTIONS: BasemapOption[] = [
   {
     id: "google-terrain",
     name: "Google Terrain & Relief",
+    provider: "google",
     type: "Relief",
     url: "https://mt{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}",
     attribution: "&copy; Google Maps",
@@ -51,6 +55,7 @@ export const BASEMAP_OPTIONS: BasemapOption[] = [
   {
     id: "google-streets",
     name: "Google Maps Jalan",
+    provider: "google",
     type: "Jalan",
     url: "https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}",
     attribution: "&copy; Google Maps",
@@ -61,20 +66,9 @@ export const BASEMAP_OPTIONS: BasemapOption[] = [
     previewColor: "#0284c7",
   },
   {
-    id: "osm-standard",
-    name: "OpenStreetMap Standar",
-    type: "Jalan",
-    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    maxZoom: 20,
-    maxNativeZoom: 19,
-    subdomains: ["a", "b", "c"],
-    description: "Peta jalan global resmi berbasis kontribusi komunitas terkini.",
-    previewColor: "#16a34a",
-  },
-  {
     id: "esri-satellite",
     name: "Citra Satelit ESRI",
+    provider: "esri",
     type: "Foto Satelit",
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     attribution: "Tiles &copy; Esri, Maxar, Earthstar Geographics",
@@ -86,6 +80,7 @@ export const BASEMAP_OPTIONS: BasemapOption[] = [
   {
     id: "esri-streets",
     name: "ESRI Street Map",
+    provider: "esri",
     type: "Jalan",
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
     attribution: "Tiles &copy; Esri",
@@ -97,6 +92,7 @@ export const BASEMAP_OPTIONS: BasemapOption[] = [
   {
     id: "esri-topo",
     name: "ESRI Topografi",
+    provider: "esri",
     type: "Topografi",
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
     attribution: "Tiles &copy; Esri",
@@ -106,20 +102,34 @@ export const BASEMAP_OPTIONS: BasemapOption[] = [
     previewColor: "#84cc16",
   },
   {
-    id: "opentopomap",
-    name: "OpenTopoMap Kontur",
-    type: "Relief",
-    url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
-    attribution: '&copy; <a href="https://opentopomap.org">OpenTopoMap</a>',
-    maxZoom: 18,
-    maxNativeZoom: 17,
+    id: "esri-natgeo",
+    name: "National Geographic",
+    provider: "esri",
+    type: "Kartografi",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}",
+    attribution: "Tiles &copy; NatGeo & Esri",
+    maxZoom: 17,
+    maxNativeZoom: 16,
+    description: "Gaya peta klasik National Geographic yang artistik.",
+    previewColor: "#eab308",
+  },
+  {
+    id: "osm-standard",
+    name: "OpenStreetMap Standar",
+    provider: "osm",
+    type: "Jalan",
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 20,
+    maxNativeZoom: 19,
     subdomains: ["a", "b", "c"],
-    description: "Garis kontur ketinggian dan bukit/lembah detail.",
-    previewColor: "#0d9488",
+    description: "Peta jalan global resmi berbasis kontribusi komunitas terkini.",
+    previewColor: "#16a34a",
   },
   {
     id: "osm-hot",
     name: "OSM Humanitarian (HOT)",
+    provider: "osm",
     type: "Fasilitas",
     url: "https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png",
     attribution: '&copy; OpenStreetMap contributors, Humanitarian OpenStreetMap Team',
@@ -130,8 +140,22 @@ export const BASEMAP_OPTIONS: BasemapOption[] = [
     previewColor: "#e11d48",
   },
   {
+    id: "opentopomap",
+    name: "OpenTopoMap Kontur",
+    provider: "osm",
+    type: "Relief",
+    url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+    attribution: '&copy; <a href="https://opentopomap.org">OpenTopoMap</a>',
+    maxZoom: 18,
+    maxNativeZoom: 17,
+    subdomains: ["a", "b", "c"],
+    description: "Garis kontur ketinggian dan bukit/lembah detail.",
+    previewColor: "#0d9488",
+  },
+  {
     id: "cyclosm",
     name: "CyclOSM Jalur Sepeda",
+    provider: "osm",
     type: "Navigasi",
     url: "https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png",
     attribution: '&copy; <a href="https://www.cyclosm.org">CyclOSM</a>',
@@ -140,16 +164,5 @@ export const BASEMAP_OPTIONS: BasemapOption[] = [
     subdomains: ["a", "b", "c"],
     description: "Peta navigasi rute sepeda dan jalur terbuka.",
     previewColor: "#8b5cf6",
-  },
-  {
-    id: "esri-natgeo",
-    name: "National Geographic",
-    type: "Kartografi",
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}",
-    attribution: "Tiles &copy; NatGeo & Esri",
-    maxZoom: 17,
-    maxNativeZoom: 16,
-    description: "Gaya peta klasik National Geographic yang artistik.",
-    previewColor: "#eab308",
   },
 ];

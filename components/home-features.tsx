@@ -65,8 +65,24 @@ const features: FeatureItem[] = [
     ]
   },
   {
+    id: "distance-routing",
+    title: "3. Pemetaan Jalan yang Dilalui",
+    subtitle: "Gambar Rute Perjalanan di Peta",
+    description: "Tandai titik-titik di peta, lalu sistem otomatis menggambar rute mengikuti jalan sebenarnya. Atur warna dan gaya garis, kelompokkan rute ke dalam folder, dan simpan agar bisa dibuka kembali kapan saja.",
+    href: "/distance-routing",
+    icon: Route,
+    badge: "Database",
+    accentBg: "bg-secondary text-foreground border-border",
+    borderHover: "hover:border-zinc-500/80 hover:shadow-lg hover:shadow-black/50",
+    featuresList: [
+      "Buat rute otomatis mengikuti jalan dari beberapa titik",
+      "Atur warna, ketebalan, dan gaya garis tiap rute",
+      "Simpan rute ke folder dan lihat kembali di peta"
+    ]
+  },
+  {
     id: "area-analysis",
-    title: "3. Analisis Wilayah & Poligon",
+    title: "4. Analisis Wilayah & Poligon",
     subtitle: "Pemetaan Batas Wilayah & Area",
     description: "Membantu memahami pembagian batas administratif wilayah, estimasi cakupan area, serta analisis keberadaan fasilitas di dalam suatu wilayah.",
     href: "/area-analysis",
@@ -82,7 +98,7 @@ const features: FeatureItem[] = [
   },
   {
     id: "geojson-tools",
-    title: "4. GeoJSON Tools & Converter",
+    title: "5. GeoJSON Tools & Converter",
     subtitle: "Pengelolaan & Konversi Berkas Spasial",
     description: "Menyediakan sarana untuk melihat, memvalidasi, mengunggah, dan mengunduh data geospasial dalam format standar GeoJSON.",
     href: "/geojson-tools",
@@ -94,23 +110,6 @@ const features: FeatureItem[] = [
       "Pemeriksaan struktur data GeoJSON",
       "Impor dan penyimpanan berkas lokal",
       "Ekspor berkas spasial siap pakai"
-    ]
-  },
-  {
-    id: "distance-routing",
-    title: "5. Pemetaan Jalan yang Dilalui",
-    subtitle: "Gambar Rute Perjalanan di Peta",
-    description: "Tandai titik-titik di peta, lalu sistem otomatis menggambar rute mengikuti jalan sebenarnya. Atur warna dan gaya garis, kelompokkan rute ke dalam folder, dan simpan agar bisa dibuka kembali kapan saja.",
-    href: "/distance-routing",
-    icon: Route,
-    badge: "Database",
-    accentBg: "bg-secondary text-foreground border-border",
-    borderHover: "hover:border-zinc-500/80 hover:shadow-lg hover:shadow-black/50",
-    featuresList: [
-      "Buat rute otomatis mengikuti jalan dari beberapa titik",
-      "Atur warna, ketebalan, dan gaya garis tiap rute",
-      "Simpan rute ke folder dan lihat kembali di peta"
-
     ]
   },
   {

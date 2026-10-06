@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Formulir Laporan Website</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f8fafc;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 16px;
+    }
+    .card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 440px;
+      width: 100%;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    }
+    h2 {
+      margin: 0 0 16px 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+      font-family: monospace;
+    }
+    textarea {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid #cbd5e1;
+      font-size: 14px;
+      font-family: inherit;
+      resize: vertical;
+      min-height: 120px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    textarea:focus {
+      border-color: #2563eb;
+    }
+    button {
+      width: 100%;
+      height: 40px;
+      border: none;
+      background: #0f172a;
+      color: #ffffff;
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    button:hover {
+      opacity: 0.9;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .alert {
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-bottom: 14px;
+      display: none;
+    }
+    .alert.error {
+      display: block;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #b91c1c;
+    }
+    .alert.success {
+      display: block;
+      background: #ecfdf5;
+      border: 1px solid #a7f3d0;
+      color: #047857;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2>Laporkan Kendala / Masukan</h2>
+    <div id="alertBox" class="alert"></div>
+
+    <form id="reportForm">
+      <div class="form-group">
+        <label for="reportMessage">Pesan Laporan</label>
+        <textarea id="reportMessage" placeholder="Tuliskan kendala, saran, atau pesan laporan Anda di sini..." required></textarea>
+      </div>
+      <button type="submit" id="btnSubmit">Kirim Laporan</button>
+    </form>
+  </div>
+
+  <script>
+    const form = document.getElementById("reportForm");
+    const messageInput = document.getElementById("reportMessage");
+    const btnSubmit = document.getElementById("btnSubmit");
+    const alertBox = document.getElementById("alertBox");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      alertBox.className = "alert";
+      alertBox.textContent = "";
+
+      const msg = messageInput.value.trim();
+      if (!msg) return;
+
+      btnSubmit.disabled = true;
+      btnSubmit.textContent = "Mengirim...";
+
+      try {
+        const response = await fetch("/api/telegram-report", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: "Tamu", // atau ganti dengan variabel user yang sedang login
+            message: msg
+          })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          alertBox.className = "alert success";
+          alertBox.textContent = data.message || "Laporan berhasil dikirim ke Bot Telegram.";
+          messageInput.value = "";
+        } else {
+          alertBox.className = "alert error";
+          alertBox.textContent = data.error || "Gagal mengirim laporan ke Bot Telegram.";
+        }
+      } catch (err) {
+        alertBox.className = "alert error";
+        alertBox.textContent = "Terjadi kesalahan jaringan saat mengirim laporan.";
+      } finally {
+        btnSubmit.disabled = false;
+        btnSubmit.textContent = "Kirim Laporan";
+      }
+    });
+  </script>
+</body>
+</html>
