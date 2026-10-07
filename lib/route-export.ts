@@ -10,7 +10,7 @@
  * 7. CSV (.csv) for Spreadsheet & Coordinates table
  */
 
-import { TraversedRoadRecord, parseRouteGeoJSON } from "@/app/distance-routing/tipe";
+import { TraversedRoadRecord, parseRouteGeoJSON } from "@/modules/modul_3/tipe";
 
 export type ExportFormat = "png" | "jpeg" | "svg" | "geojson" | "json" | "gpx" | "kml" | "csv";
 

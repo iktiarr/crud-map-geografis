@@ -7,7 +7,7 @@ import {
   WaypointItem,
   AlternativeRouteOption,
 } from "@/lib/road-routing";
-import { getLetterLabel } from "@/app/distance-routing/tipe";
+import { getLetterLabel } from "@/modules/modul_3/tipe";
 import { Trash2, Loader2, Link2, Unlink, Check, Eye, MoveUp, MoveDown, Edit3, X, Zap } from "lucide-react";
 
 export type RouteGeoJsonObject = {

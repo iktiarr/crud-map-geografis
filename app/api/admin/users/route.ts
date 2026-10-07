@@ -16,13 +16,17 @@ export async function GET(req: NextRequest) {
       users = await sql`
         SELECT id, name, username, email, role, phone, address, created_at, updated_at
         FROM users
-        WHERE LOWER(name) LIKE ${q} OR LOWER(username) LIKE ${q} OR LOWER(email) LIKE ${q}
+        WHERE (role = 'user' OR role IS NULL)
+          AND email != 'globalmapsstudio.iktiarramadani@web.com'
+          AND (LOWER(name) LIKE ${q} OR LOWER(username) LIKE ${q} OR LOWER(email) LIKE ${q} OR LOWER(COALESCE(phone, '')) LIKE ${q})
         ORDER BY id ASC;
       `;
     } else {
       users = await sql`
         SELECT id, name, username, email, role, phone, address, created_at, updated_at
         FROM users
+        WHERE (role = 'user' OR role IS NULL)
+          AND email != 'globalmapsstudio.iktiarramadani@web.com'
         ORDER BY id ASC;
       `;
     }

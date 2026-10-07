@@ -285,3 +285,23 @@ div {
   border-radius: 8px 0 0 0 !important;
   font-size: 10px !important;
 }
+
+/* Custom Permanent Pin Labels for Map */
+.custom-map-pin-label {
+  background-color: rgba(15, 23, 42, 0.90) !important;
+  color: #ffffff !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  font-family: system-ui, -apple-system, sans-serif !important;
+  border-radius: 8px !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  padding: 3px 8px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+  white-space: nowrap !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+.custom-map-pin-label::before {
+  border-top-color: rgba(15, 23, 42, 0.90) !important;
+}
